@@ -32,7 +32,7 @@ export default function JobDetail() {
   const total = job.checklist.length;
   const done = job.checklist.filter((i) => i.completed).length;
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const backLink = user?.role === 'host' ? `/listings/${job.listing?._id}` : '/cleaner';
+  const backLink = user?.role === 'host' ? `/listings/${job.listing?.id}` : '/cleaner';
 
   return (
     <div className="page" style={{ maxWidth: 640 }}>
@@ -97,12 +97,12 @@ export default function JobDetail() {
           <div className="stack">
             {job.checklist.map((item) => (
               <div
-                key={item._id}
+                key={item.id}
                 className={`checklist-item${item.completed ? ' done' : ''}`}
-                onClick={() => !toggling[item._id] && handleToggle(item._id, item.completed)}
+                onClick={() => !toggling[item.id] && handleToggle(item.id, item.completed)}
                 style={{ cursor: 'pointer', userSelect: 'none' }}
               >
-                {toggling[item._id]
+                {toggling[item.id]
                   ? <span className="spinner" style={{ width: 16, height: 16, flexShrink: 0 }} />
                   : <input type="checkbox" checked={item.completed} readOnly />
                 }
