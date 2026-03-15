@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listings  Listing[]          @relation("HostListings")
+  cleaning  ListingCleaner[]
+  jobs      Job[]
+}
+
+enum Role {
+  host
+  cleaner
+}
+
+model Listing {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  icalUrl     String
+  lastSynced  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hostId      String
+  host        User     @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+
+  rooms       Room[]
+  cleaners    ListingCleaner[]
+  jobs        Job[]
+}
+
+model ListingCleaner {
+  listingId  String
+  cleanerId  String
+  listing    Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  cleaner    User    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, cleanerId])
+}
+
+model Room {
+  id        String          @id @default(cuid())
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  listingId String
+  listing   Listing         @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  checklistItems ChecklistTemplate[]
+  jobs           Job[]
+}
+
+model ChecklistTemplate {
+  id    String @id @default(cuid())
+  text  String
+  order Int    @default(0)
+
+  roomId String
+  room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id           String    @id @default(cuid())
+  guestName    String    @default("Airbnb Guest")
+  checkoutDate DateTime
+  checkinDate  DateTime?
+  status       JobStatus @default(pending)
+  smsSent      Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  listingId    String
+  listing      Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  roomId       String
+  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  cleanerId    String?
+  cleaner      User?     @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+
+  checklistItems JobChecklist[]
+}
+
+enum JobStatus {
+  pending
+  in_progress
+  completed
+}
+
+model JobChecklist {
+  id          String    @id @default(cuid())
+  text        String
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}

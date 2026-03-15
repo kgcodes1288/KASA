@@ -1,13 +1,17 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const Room = require('../models/Room');
-const Listing = require('../models/Listing');
+const prisma = require('../lib/prisma');
 
 // GET /api/rooms/listing/:listingId
 router.get('/listing/:listingId', auth, async (req, res) => {
   try {
-    const rooms = await Room.find({ listing: req.params.listingId }).sort({ name: 1 });
-    res.json(rooms);
+    const rooms = await prisma.room.findMany({
+      where: { listingId: req.params.listingId },
+      include: { checklistItems: { orderBy: { order: 'asc' } } },
+      orderBy: { name: 'asc' },
+    });
+    // Rename checklistItems -> checklist for frontend compatibility
+    res.json(rooms.map((r) => ({ ...r, checklist: r.checklistItems })));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -15,19 +19,23 @@ router.get('/listing/:listingId', auth, async (req, res) => {
 
 // POST /api/rooms
 router.post('/', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
     const { listing: listingId, name, checklist } = req.body;
-    const listing = await Listing.findOne({ _id: listingId, host: req.user._id });
+    const listing = await prisma.listing.findFirst({ where: { id: listingId, hostId: req.user.id } });
     if (!listing) return res.status(403).json({ message: 'Not your listing' });
 
-    const room = await Room.create({
-      listing: listingId,
-      name,
-      checklist: (checklist || []).map((text, i) => ({ text, order: i })),
+    const room = await prisma.room.create({
+      data: {
+        name,
+        listingId,
+        checklistItems: {
+          create: (checklist || []).map((text, i) => ({ text, order: i })),
+        },
+      },
+      include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
-    res.status(201).json(room);
+    res.status(201).json({ ...room, checklist: room.checklistItems });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -35,26 +43,31 @@ router.post('/', auth, async (req, res) => {
 
 // PUT /api/rooms/:id
 router.put('/:id', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const room = await Room.findById(req.params.id);
+    const room = await prisma.room.findUnique({ where: { id: req.params.id }, include: { listing: true } });
     if (!room) return res.status(404).json({ message: 'Room not found' });
-
-    const listing = await Listing.findOne({ _id: room.listing, host: req.user._id });
-    if (!listing) return res.status(403).json({ message: 'Not your listing' });
+    if (room.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Not your listing' });
 
     const { name, checklist } = req.body;
-    if (name) room.name = name;
-    if (checklist !== undefined) {
-      room.checklist = checklist.map((item, i) =>
-        typeof item === 'string'
-          ? { text: item, order: i }
-          : { text: item.text, order: item.order ?? i }
-      );
-    }
-    await room.save();
-    res.json(room);
+
+    // Delete old items and recreate — simplest approach
+    await prisma.checklistTemplate.deleteMany({ where: { roomId: req.params.id } });
+
+    const updated = await prisma.room.update({
+      where: { id: req.params.id },
+      data: {
+        name: name || room.name,
+        checklistItems: {
+          create: (checklist || []).map((item, i) => ({
+            text: typeof item === 'string' ? item : item.text,
+            order: i,
+          })),
+        },
+      },
+      include: { checklistItems: { orderBy: { order: 'asc' } } },
+    });
+    res.json({ ...updated, checklist: updated.checklistItems });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -62,16 +75,13 @@ router.put('/:id', auth, async (req, res) => {
 
 // DELETE /api/rooms/:id
 router.delete('/:id', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const room = await Room.findById(req.params.id);
+    const room = await prisma.room.findUnique({ where: { id: req.params.id }, include: { listing: true } });
     if (!room) return res.status(404).json({ message: 'Room not found' });
+    if (room.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Not your listing' });
 
-    const listing = await Listing.findOne({ _id: room.listing, host: req.user._id });
-    if (!listing) return res.status(403).json({ message: 'Not your listing' });
-
-    await room.deleteOne();
+    await prisma.room.delete({ where: { id: req.params.id } });
     res.json({ message: 'Room deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

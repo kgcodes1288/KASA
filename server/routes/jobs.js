@@ -1,28 +1,31 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const Job = require('../models/Job');
-const Listing = require('../models/Listing');
+const prisma = require('../lib/prisma');
+
+const jobInclude = {
+  include: {
+    listing: { select: { id: true, name: true, address: true } },
+    room: { select: { id: true, name: true } },
+    cleaner: { select: { id: true, name: true, phone: true } },
+    checklistItems: { orderBy: { id: 'asc' } },
+  },
+};
+
+const fmt = (j) => ({ ...j, checklist: j.checklistItems });
 
 // GET /api/jobs
 router.get('/', auth, async (req, res) => {
   try {
-    let query = {};
+    let where = {};
     if (req.user.role === 'cleaner') {
-      query.cleaner = req.user._id;
+      where.cleanerId = req.user.id;
     } else {
-      const listings = await Listing.find({ host: req.user._id }).select('_id');
-      query.listing = { $in: listings.map((l) => l._id) };
+      where.listing = { hostId: req.user.id };
     }
+    if (req.query.status) where.status = req.query.status;
 
-    const { status } = req.query;
-    if (status) query.status = status;
-
-    const jobs = await Job.find(query)
-      .populate('listing', 'name address')
-      .populate('room', 'name')
-      .populate('cleaner', 'name phone')
-      .sort({ checkoutDate: 1 });
-    res.json(jobs);
+    const jobs = await prisma.job.findMany({ where, orderBy: { checkoutDate: 'asc' }, ...jobInclude });
+    res.json(jobs.map(fmt));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -31,12 +34,9 @@ router.get('/', auth, async (req, res) => {
 // GET /api/jobs/:id
 router.get('/:id', auth, async (req, res) => {
   try {
-    const job = await Job.findById(req.params.id)
-      .populate('listing', 'name address')
-      .populate('room', 'name')
-      .populate('cleaner', 'name phone');
+    const job = await prisma.job.findUnique({ where: { id: req.params.id }, ...jobInclude });
     if (!job) return res.status(404).json({ message: 'Job not found' });
-    res.json(job);
+    res.json(fmt(job));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -45,39 +45,40 @@ router.get('/:id', auth, async (req, res) => {
 // PATCH /api/jobs/:id/checklist/:itemId — toggle a checklist item
 router.patch('/:id/checklist/:itemId', auth, async (req, res) => {
   try {
-    const job = await Job.findById(req.params.id);
-    if (!job) return res.status(404).json({ message: 'Job not found' });
+    const { completed } = req.body;
 
-    const item = job.checklist.id(req.params.itemId);
-    if (!item) return res.status(404).json({ message: 'Checklist item not found' });
+    await prisma.jobChecklist.update({
+      where: { id: req.params.itemId },
+      data: { completed, completedAt: completed ? new Date() : null },
+    });
 
-    item.completed = req.body.completed;
-    item.completedAt = req.body.completed ? new Date() : null;
+    // Recalculate job status
+    const items = await prisma.jobChecklist.findMany({ where: { jobId: req.params.id } });
+    const total = items.length;
+    const done = items.filter((i) => i.completed).length;
+    const status = done === total ? 'completed' : done > 0 ? 'in_progress' : 'pending';
 
-    // Auto-update job status
-    const total = job.checklist.length;
-    const done = job.checklist.filter((i) => i.completed).length;
-    job.status = done === total ? 'completed' : done > 0 ? 'in_progress' : 'pending';
-
-    await job.save();
-    res.json(job);
+    const job = await prisma.job.update({
+      where: { id: req.params.id },
+      data: { status },
+      ...jobInclude,
+    });
+    res.json(fmt(job));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// PATCH /api/jobs/:id/assign — host assigns a cleaner
+// PATCH /api/jobs/:id/assign
 router.patch('/:id/assign', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const job = await Job.findByIdAndUpdate(
-      req.params.id,
-      { cleaner: req.body.cleanerId },
-      { new: true }
-    ).populate('cleaner', 'name phone');
-    if (!job) return res.status(404).json({ message: 'Job not found' });
-    res.json(job);
+    const job = await prisma.job.update({
+      where: { id: req.params.id },
+      data: { cleanerId: req.body.cleanerId },
+      ...jobInclude,
+    });
+    res.json(fmt(job));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

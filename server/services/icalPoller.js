@@ -1,25 +1,31 @@
 const ical = require('node-ical');
 const cron = require('node-cron');
-const Listing = require('../models/Listing');
-const Room = require('../models/Room');
-const Job = require('../models/Job');
-const User = require('../models/User');
+const prisma = require('../lib/prisma');
 const { sendCleaningAlert } = require('./sms');
 
-/**
- * Sync a single listing: parse its iCal URL and create jobs for upcoming checkouts.
- */
 async function syncListing(listing) {
   try {
     console.log(`[iCal] Syncing listing: ${listing.name}`);
     const events = await ical.async.fromURL(listing.icalUrl);
     const now = new Date();
-    const rooms = await Room.find({ listing: listing._id });
+    const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const rooms = await prisma.room.findMany({
+      where: { listingId: listing.id },
+      include: { checklistItems: { orderBy: { order: 'asc' } } },
+    });
 
     if (rooms.length === 0) {
       console.log(`[iCal] No rooms for listing ${listing.name} — skipping`);
       return;
     }
+
+    // Get cleaners for this listing
+    const listingWithCleaners = await prisma.listing.findUnique({
+      where: { id: listing.id },
+      include: { cleaners: { include: { cleaner: true } } },
+    });
+    const cleaners = listingWithCleaners.cleaners.map((lc) => lc.cleaner);
 
     for (const event of Object.values(events)) {
       if (event.type !== 'VEVENT') continue;
@@ -27,79 +33,63 @@ async function syncListing(listing) {
       const checkoutDate = event.end ? new Date(event.end) : null;
       const checkinDate = event.start ? new Date(event.start) : null;
 
-      // Only process future or very recent checkouts (within last 24h)
-      if (!checkoutDate) continue;
-      const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      if (checkoutDate < cutoff) continue;
+      if (!checkoutDate || checkoutDate < cutoff) continue;
 
       for (const room of rooms) {
-        const existing = await Job.findOne({
-          listing: listing._id,
-          room: room._id,
-          checkoutDate,
+        const existing = await prisma.job.findFirst({
+          where: { listingId: listing.id, roomId: room.id, checkoutDate },
         });
         if (existing) continue;
 
-        // Assign a cleaner round-robin from the listing's cleaners list
+        // Assign a cleaner randomly
         let assignedCleaner = null;
-        if (listing.cleaners && listing.cleaners.length > 0) {
-          const idx = Math.floor(Math.random() * listing.cleaners.length);
-          assignedCleaner = listing.cleaners[idx]._id || listing.cleaners[idx];
+        if (cleaners.length > 0) {
+          assignedCleaner = cleaners[Math.floor(Math.random() * cleaners.length)];
         }
 
-        const job = await Job.create({
-          listing: listing._id,
-          room: room._id,
-          cleaner: assignedCleaner,
-          checkoutDate,
-          checkinDate,
-          guestName: event.summary || 'Airbnb Guest',
-          status: 'pending',
-          checklist: room.checklist.map((item) => ({
-            text: item.text,
-            completed: false,
-          })),
+        const job = await prisma.job.create({
+          data: {
+            listingId: listing.id,
+            roomId: room.id,
+            cleanerId: assignedCleaner?.id || null,
+            checkoutDate,
+            checkinDate,
+            guestName: event.summary || 'Airbnb Guest',
+            status: 'pending',
+            checklistItems: {
+              create: room.checklistItems.map((item) => ({ text: item.text })),
+            },
+          },
         });
 
         console.log(`[iCal] Created job for room "${room.name}" — checkout ${checkoutDate}`);
 
-        // Send SMS notification to the assigned cleaner
-        if (assignedCleaner) {
-          const cleanerUser = await User.findById(assignedCleaner);
-          if (cleanerUser?.phone) {
-            await sendCleaningAlert({
-              to: cleanerUser.phone,
-              cleanerName: cleanerUser.name,
-              listingName: listing.name,
-              roomName: room.name,
-              checkoutDate,
-            });
-            job.smsSent = true;
-            await job.save();
-          }
+        if (assignedCleaner?.phone) {
+          await sendCleaningAlert({
+            to: assignedCleaner.phone,
+            cleanerName: assignedCleaner.name,
+            listingName: listing.name,
+            roomName: room.name,
+            checkoutDate,
+          });
+          await prisma.job.update({ where: { id: job.id }, data: { smsSent: true } });
         }
       }
     }
 
-    listing.lastSynced = new Date();
-    await listing.save();
+    await prisma.listing.update({ where: { id: listing.id }, data: { lastSynced: new Date() } });
     console.log(`[iCal] Sync complete for: ${listing.name}`);
   } catch (err) {
-    console.error(`[iCal] Error syncing listing ${listing._id}:`, err.message);
+    console.error(`[iCal] Error syncing listing ${listing.id}:`, err.message);
   }
 }
 
-/**
- * Start the hourly cron job to poll all listings.
- */
 function startPoller() {
   cron.schedule('0 * * * *', async () => {
     console.log('[iCal] Running hourly sync...');
     try {
-      const listings = await Listing.find({}).populate('cleaners');
-      for (const listing of listings) {
-        await syncListing(listing);
-      }
+      const listings = await prisma.listing.findMany();
+      for (const listing of listings) await syncListing(listing);
     } catch (err) {
       console.error('[iCal] Poller error:', err.message);
     }

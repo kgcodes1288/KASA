@@ -1,9 +1,20 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const Listing = require('../models/Listing');
+const prisma = require('../lib/prisma');
 const { syncListing } = require('../services/icalPoller');
 
-// POST /api/listings — host creates listing
+const listingWithCleaners = {
+  include: {
+    cleaners: { include: { cleaner: { select: { id: true, name: true, email: true, phone: true } } } },
+  },
+};
+
+const fmt = (l) => ({
+  ...l,
+  cleaners: l.cleaners?.map((lc) => lc.cleaner) ?? [],
+});
+
+// POST /api/listings
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host')
     return res.status(403).json({ message: 'Only hosts can create listings' });
@@ -11,24 +22,30 @@ router.post('/', auth, async (req, res) => {
     const { name, address, icalUrl } = req.body;
     if (!name || !icalUrl)
       return res.status(400).json({ message: 'name and icalUrl are required' });
-    const listing = await Listing.create({ host: req.user._id, name, address, icalUrl });
-    res.status(201).json(listing);
+    const listing = await prisma.listing.create({
+      data: { name, address: address || null, icalUrl, hostId: req.user.id },
+      ...listingWithCleaners,
+    });
+    res.status(201).json(fmt(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// GET /api/listings — host: own; cleaner: assigned
+// GET /api/listings
 router.get('/', auth, async (req, res) => {
   try {
-    const query =
+    const where =
       req.user.role === 'host'
-        ? { host: req.user._id }
-        : { cleaners: req.user._id };
-    const listings = await Listing.find(query)
-      .populate('cleaners', 'name email phone')
-      .sort({ createdAt: -1 });
-    res.json(listings);
+        ? { hostId: req.user.id }
+        : { cleaners: { some: { cleanerId: req.user.id } } };
+
+    const listings = await prisma.listing.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      ...listingWithCleaners,
+    });
+    res.json(listings.map(fmt));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -37,9 +54,12 @@ router.get('/', auth, async (req, res) => {
 // GET /api/listings/:id
 router.get('/:id', auth, async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id).populate('cleaners', 'name email phone');
+    const listing = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+      ...listingWithCleaners,
+    });
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
-    res.json(listing);
+    res.json(fmt(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -48,14 +68,15 @@ router.get('/:id', auth, async (req, res) => {
 // PUT /api/listings/:id
 router.put('/:id', auth, async (req, res) => {
   try {
-    const listing = await Listing.findOneAndUpdate(
-      { _id: req.params.id, host: req.user._id },
-      { $set: req.body },
-      { new: true }
-    ).populate('cleaners', 'name email phone');
-    if (!listing) return res.status(404).json({ message: 'Not found or not authorized' });
-    res.json(listing);
+    const { name, address, icalUrl } = req.body;
+    const listing = await prisma.listing.update({
+      where: { id: req.params.id, hostId: req.user.id },
+      data: { name, address, icalUrl },
+      ...listingWithCleaners,
+    });
+    res.json(fmt(listing));
   } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ message: 'Not found or not authorized' });
     res.status(500).json({ message: err.message });
   }
 });
@@ -63,30 +84,32 @@ router.put('/:id', auth, async (req, res) => {
 // DELETE /api/listings/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const listing = await Listing.findOneAndDelete({ _id: req.params.id, host: req.user._id });
-    if (!listing) return res.status(404).json({ message: 'Not found or not authorized' });
+    await prisma.listing.delete({ where: { id: req.params.id, hostId: req.user.id } });
     res.json({ message: 'Listing deleted' });
   } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ message: 'Not found or not authorized' });
     res.status(500).json({ message: err.message });
   }
 });
 
 // POST /api/listings/:id/cleaners — add cleaner by email
 router.post('/:id/cleaners', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const User = require('../models/User');
-    const cleaner = await User.findOne({ email: req.body.email, role: 'cleaner' });
+    const cleaner = await prisma.user.findFirst({ where: { email: req.body.email, role: 'cleaner' } });
     if (!cleaner) return res.status(404).json({ message: 'Cleaner not found with that email' });
 
-    const listing = await Listing.findOneAndUpdate(
-      { _id: req.params.id, host: req.user._id },
-      { $addToSet: { cleaners: cleaner._id } },
-      { new: true }
-    ).populate('cleaners', 'name email phone');
-    if (!listing) return res.status(404).json({ message: 'Listing not found' });
-    res.json(listing);
+    await prisma.listingCleaner.upsert({
+      where: { listingId_cleanerId: { listingId: req.params.id, cleanerId: cleaner.id } },
+      create: { listingId: req.params.id, cleanerId: cleaner.id },
+      update: {},
+    });
+
+    const listing = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+      ...listingWithCleaners,
+    });
+    res.json(fmt(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -94,26 +117,29 @@ router.post('/:id/cleaners', auth, async (req, res) => {
 
 // DELETE /api/listings/:id/cleaners/:cleanerId
 router.delete('/:id/cleaners/:cleanerId', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const listing = await Listing.findOneAndUpdate(
-      { _id: req.params.id, host: req.user._id },
-      { $pull: { cleaners: req.params.cleanerId } },
-      { new: true }
-    ).populate('cleaners', 'name email phone');
-    res.json(listing);
+    await prisma.listingCleaner.delete({
+      where: { listingId_cleanerId: { listingId: req.params.id, cleanerId: req.params.cleanerId } },
+    });
+    const listing = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+      ...listingWithCleaners,
+    });
+    res.json(fmt(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// POST /api/listings/:id/sync — manual iCal sync
+// POST /api/listings/:id/sync
 router.post('/:id/sync', auth, async (req, res) => {
-  if (req.user.role !== 'host')
-    return res.status(403).json({ message: 'Hosts only' });
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const listing = await Listing.findOne({ _id: req.params.id, host: req.user._id }).populate('cleaners');
+    const listing = await prisma.listing.findFirst({
+      where: { id: req.params.id, hostId: req.user.id },
+      include: { cleaners: { include: { cleaner: true } } },
+    });
     if (!listing) return res.status(404).json({ message: 'Not found' });
     await syncListing(listing);
     res.json({ message: 'Sync complete', lastSynced: listing.lastSynced });
