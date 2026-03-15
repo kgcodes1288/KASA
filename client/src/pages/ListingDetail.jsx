@@ -46,7 +46,7 @@ function RoomModal({ listingId, onClose, onSaved, room }) {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/rooms/${room._id}`, { name, checklist });
+        await api.put(`/rooms/${room.id}`, { name, checklist });
       } else {
         await api.post('/rooms', { listing: listingId, name, checklist });
       }
@@ -153,7 +153,7 @@ export default function ListingDetail() {
       ]);
       setListing(lRes.data);
       setRooms(rRes.data);
-      setJobs(jRes.data.filter((j) => j.listing?._id === id || j.listing === id));
+      setJobs(jRes.data.filter((j) => j.listing?.id === id || j.listing === id));
     } finally {
       setLoading(false);
     }
@@ -213,12 +213,12 @@ export default function ListingDetail() {
           ) : (
             <div className="grid-2">
               {rooms.map((r) => (
-                <div key={r._id} className="card">
+                <div key={r.id} className="card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                     <h3>{r.name}</h3>
                     <div className="cluster">
                       <button className="btn-icon" onClick={() => { setEditRoom(r); setRoomModal(true); }}>✏️</button>
-                      <button className="btn-icon" onClick={() => handleDeleteRoom(r._id)}>🗑</button>
+                      <button className="btn-icon" onClick={() => handleDeleteRoom(r.id)}>🗑</button>
                     </div>
                   </div>
                   {r.checklist.length === 0 ? (
@@ -226,7 +226,7 @@ export default function ListingDetail() {
                   ) : (
                     <div className="stack" style={{ gap: 6 }}>
                       {r.checklist.map((item) => (
-                        <div key={item._id} style={{ fontSize: 13, padding: '5px 10px', background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                        <div key={item.id} style={{ fontSize: 13, padding: '5px 10px', background: 'var(--bg)', borderRadius: 6, border: '1px solid var(--border)' }}>
                           ☑ {item.text}
                         </div>
                       ))}
@@ -251,13 +251,13 @@ export default function ListingDetail() {
           ) : (
             <div className="stack">
               {listing.cleaners.map((c) => (
-                <div key={c._id} className="card" style={{ padding: '14px 18px' }}>
+                <div key={c.id} className="card" style={{ padding: '14px 18px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <strong>{c.name}</strong>
                       <p style={{ fontSize: 13 }}>{c.email} {c.phone && `· ${c.phone}`}</p>
                     </div>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveCleaner(c._id)}>Remove</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveCleaner(c.id)}>Remove</button>
                   </div>
                 </div>
               ))}
@@ -278,7 +278,7 @@ export default function ListingDetail() {
           ) : (
             <div className="stack">
               {jobs.map((j) => (
-                <Link to={`/jobs/${j._id}`} key={j._id} style={{ textDecoration: 'none' }}>
+                <Link to={`/jobs/${j.id}`} key={j.id} style={{ textDecoration: 'none' }}>
                   <div className="card card-hover" style={{ padding: '14px 18px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>

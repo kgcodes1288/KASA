@@ -114,7 +114,7 @@ export default function HostDashboard() {
       ) : (
         <div className="grid-2">
           {listings.map((l) => (
-            <div key={l._id} className="card card-hover">
+            <div key={l.id} className="card card-hover">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                 <div>
                   <h3 style={{ marginBottom: 2 }}>{l.name}</h3>
@@ -129,16 +129,16 @@ export default function HostDashboard() {
               </div>
 
               <div className="cluster">
-                <Link to={`/listings/${l._id}`} className="btn btn-secondary btn-sm">
+                <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
                   🛏 Manage rooms
                 </Link>
-                <button className="btn btn-secondary btn-sm" onClick={() => handleSync(l._id)} disabled={syncing[l._id]}>
-                  {syncing[l._id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
+                <button className="btn btn-secondary btn-sm" onClick={() => handleSync(l.id)} disabled={syncing[l._id]}>
+                  {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
                 </button>
                 <button className="btn btn-secondary btn-sm" onClick={() => { setEditTarget(l); setShowModal(true); }}>
                   ✏️ Edit
                 </button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(l._id)}>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(l.id)}>
                   🗑
                 </button>
               </div>
