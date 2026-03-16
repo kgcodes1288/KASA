@@ -1,6 +1,6 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-const { authenticate } = require('../middleware/auth');
+const authenticate = require('../middleware/auth');
 const crypto = require('crypto');
 const twilio = require('twilio');
 
