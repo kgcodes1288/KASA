@@ -143,6 +143,40 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 .tag-input-field { border: none; outline: none; font-family: var(--font-body); font-size: 14px; background: transparent; color: var(--ink); flex: 1; min-width: 100px; }
 
 @media (max-width: 600px) {
-  .form-row { grid-template-columns: 1fr; }
+  /* Typography */
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.2rem; }
+
+  /* Layout */
+  .page { padding: 16px 14px; }
+  .page-narrow { padding: 16px 14px; }
   .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .section-header button { width: 100%; justify-content: center; }
+
+  /* Grid — stack to single column on mobile */
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
+
+  /* Forms */
+  .form-row { grid-template-columns: 1fr; }
+
+  /* Cards */
+  .card { padding: 14px; }
+
+  /* Buttons */
+  .cluster { gap: 6px; }
+  .cluster .btn { flex: 1; justify-content: center; }
+
+  /* Modal — full width on mobile */
+  .modal { padding: 20px 16px; }
+  .modal-footer { flex-direction: column; }
+  .modal-footer .btn { width: 100%; justify-content: center; }
+
+  /* Navbar */
+  .navbar-inner { padding: 0 14px; gap: 8px; }
+  .navbar-brand { font-size: 1.05rem; }
+  .nav-link { font-size: 13px; padding: 4px 7px; }
+
+  /* Auth */
+  .auth-card { padding: 24px 18px; }
 }
