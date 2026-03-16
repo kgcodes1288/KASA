@@ -29,6 +29,10 @@ export default function Navbar() {
                 My Jobs
               </NavLink>
             )}
+            {/* ── NEW ── */}
+            <NavLink to="/account" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+              My Account
+            </NavLink>
             <span className="badge" style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', fontSize: 13 }}>
               {user.name}
             </span>

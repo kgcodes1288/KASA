@@ -1,0 +1,127 @@
+.account-page {
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  background: #f9fafb;
+}
+
+.account-container {
+  max-width: 580px;
+  margin: 0 auto;
+}
+
+/* Header with avatar */
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.account-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.account-header h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  color: #111827;
+}
+
+.role-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+
+.role-host    { background: #dbeafe; color: #1d4ed8; }
+.role-cleaner { background: #d1fae5; color: #065f46; }
+
+/* Card sections */
+.account-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.account-section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* Form */
+.account-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.account-form label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.35rem;
+}
+
+.account-form input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #111827;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.account-form input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+
+/* Feedback messages */
+.form-msg {
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.form-msg.success { background: #d1fae5; color: #065f46; }
+.form-msg.error   { background: #fee2e2; color: #991b1b; }
+
+/* Button */
+.btn-primary {
+  padding: 0.6rem 1.25rem;
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-primary:hover   { background: #4f46e5; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }

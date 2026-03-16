@@ -52,4 +52,57 @@ router.get('/me', auth, (req, res) => {
   res.json(safeUser(req.user));
 });
 
+
+// PUT /api/auth/profile
+router.put('/profile', auth, async (req, res) => {
+  try {
+    const { name, email, phone } = req.body;
+    if (!name || !email)
+      return res.status(400).json({ message: 'Name and email are required' });
+
+    // If email is changing, make sure it's not already taken
+    if (email !== req.user.email) {
+      const existing = await prisma.user.findUnique({ where: { email } });
+      if (existing) return res.status(400).json({ message: 'Email already in use' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { name, email, phone: phone || null },
+    });
+
+    res.json(safeUser(updated));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/auth/password
+router.put('/password', auth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword)
+      return res.status(400).json({ message: 'Both fields are required' });
+    if (newPassword.length < 6)
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+
+    const isMatch = await bcrypt.compare(currentPassword, req.user.password);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Current password is incorrect' });
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { password: hashed },
+    });
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+
 module.exports = router;

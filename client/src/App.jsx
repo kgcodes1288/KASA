@@ -7,6 +7,7 @@ import HostDashboard from './pages/HostDashboard';
 import CleanerDashboard from './pages/CleanerDashboard';
 import ListingDetail from './pages/ListingDetail';
 import JobDetail from './pages/JobDetail';
+import AccountPage from './pages/AccountPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -64,6 +65,11 @@ export default function App() {
             <PrivateRoute>
               <Layout><JobDetail /></Layout>
             </PrivateRoute>
+          } />
+          <Route path="/account" element={
+          <PrivateRoute>
+          <Layout><AccountPage /></Layout>
+          </PrivateRoute>
           } />
 
           <Route path="*" element={<Navigate to="/" replace />} />

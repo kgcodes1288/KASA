@@ -40,6 +40,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+
+  // Add this function inside AuthProvider, after `logout`
+const updateUser = (updatedFields) => {
+  const merged = { ...user, ...updatedFields };
+  localStorage.setItem('user', JSON.stringify(merged));
+  setUser(merged);
+};
+
+// Update the Provider value to include it:
+<AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+</AuthContext.Provider>
+
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout }}>
       {children}
