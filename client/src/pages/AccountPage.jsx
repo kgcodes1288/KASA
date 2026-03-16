@@ -62,6 +62,11 @@ export default function AccountPage() {
     }
   };
 
+  // Add this derived value right above your return statement
+  const passwordMismatch =
+    passwords.confirmPassword.length > 0 &&
+    passwords.newPassword !== passwords.confirmPassword;
+
   return (
     <div className="account-page">
       <div className="account-container">
@@ -159,17 +164,24 @@ export default function AccountPage() {
                 type="password"
                 value={passwords.confirmPassword}
                 onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+                style={{
+                  borderColor: passwordMismatch ? '#ef4444' : '',
+                  boxShadow: passwordMismatch ? '0 0 0 3px rgba(239,68,68,0.15)' : '',
+                }}
                 required
               />
+              {passwordMismatch && (
+                <p className="field-error">Passwords do not match</p>
+              )}
             </div>
 
             {pwMsg && (
               <p className={`form-msg ${pwMsg.type}`}>{pwMsg.text}</p>
             )}
 
-            <button type="submit" className="btn-primary" disabled={pwLoading}>
-              {pwLoading ? 'Updating…' : 'Update Password'}
-            </button>
+          <button type="submit" className="btn-primary" disabled={pwLoading || passwordMismatch}>
+            {pwLoading ? 'Updating…' : 'Update Password'}
+          </button>
           </form>
         </section>
 
