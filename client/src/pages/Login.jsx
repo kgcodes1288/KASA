@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirect = searchParams.get('redirect');
+
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,7 +17,11 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       const user = await login(form.email, form.password);
-      navigate(user.role === 'host' ? '/host' : '/cleaner');
+      if (redirect) {
+        navigate(redirect);
+      } else {
+        navigate(user.role === 'host' ? '/host' : '/cleaner');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {
@@ -29,9 +36,7 @@ export default function Login() {
           <h1>🧹 CleanStay</h1>
           <p style={{ marginTop: 6 }}>Airbnb cleaning, organised.</p>
         </div>
-
         {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email</label>
@@ -47,7 +52,6 @@ export default function Login() {
             {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Sign in'}
           </button>
         </form>
-
         <div className="divider" />
         <p style={{ textAlign: 'center', fontSize: 14 }}>
           Don't have an account? <Link to="/register">Create one</Link>

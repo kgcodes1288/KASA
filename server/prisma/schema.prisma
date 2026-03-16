@@ -20,6 +20,7 @@ model User {
   listings  Listing[]          @relation("HostListings")
   cleaning  ListingCleaner[]
   jobs      Job[]
+  coHosting ListingCoHost[]    @relation("CoHostUser")
 }
 
 enum Role {
@@ -28,25 +29,51 @@ enum Role {
 }
 
 model Listing {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   address     String?
   icalUrl     String
   lastSynced  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   hostId      String
-  host        User     @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
 
+  host        User             @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
   rooms       Room[]
   cleaners    ListingCleaner[]
   jobs        Job[]
+  coHosts     ListingCoHost[]  @relation("CoHostListing")
+}
+
+model ListingCoHost {
+  id          String        @id @default(cuid())
+  listingId   String
+  userId      String?
+  role        CoHostRole
+  status      CoHostStatus  @default(PENDING)
+  inviteToken String        @unique
+  invitePhone String
+  createdAt   DateTime      @default(now())
+
+  listing     Listing       @relation("CoHostListing", fields: [listingId], references: [id], onDelete: Cascade)
+  user        User?         @relation("CoHostUser", fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum CoHostRole {
+  COHOST
+  VIEW_ONLY
+}
+
+enum CoHostStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 model ListingCleaner {
   listingId  String
   cleanerId  String
+
   listing    Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   cleaner    User    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
 
@@ -54,24 +81,23 @@ model ListingCleaner {
 }
 
 model Room {
-  id        String          @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   listingId String
-  listing   Listing         @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
+  listing        Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
   checklistItems ChecklistTemplate[]
   jobs           Job[]
 }
 
 model ChecklistTemplate {
-  id    String @id @default(cuid())
-  text  String
-  order Int    @default(0)
-
+  id     String @id @default(cuid())
+  text   String
+  order  Int    @default(0)
   roomId String
+
   room   Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
 }
 
@@ -84,16 +110,13 @@ model Job {
   smsSent      Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-
   listingId    String
-  listing      Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
-
   roomId       String
-  room         Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
-
   cleanerId    String?
-  cleaner      User?     @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
 
+  listing        Listing        @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  room           Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  cleaner        User?          @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
   checklistItems JobChecklist[]
 }
 
@@ -108,7 +131,7 @@ model JobChecklist {
   text        String
   completed   Boolean   @default(false)
   completedAt DateTime?
+  jobId       String
 
-  jobId String
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }

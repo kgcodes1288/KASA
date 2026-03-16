@@ -18,6 +18,7 @@ app.use('/api/listings', require('./routes/listings'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/cohosts', require('./routes/cohosts'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

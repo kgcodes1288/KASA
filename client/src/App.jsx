@@ -8,6 +8,7 @@ import CleanerDashboard from './pages/CleanerDashboard';
 import ListingDetail from './pages/ListingDetail';
 import JobDetail from './pages/JobDetail';
 import AccountPage from './pages/AccountPage';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -40,38 +41,35 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
           <Route path="/" element={<PrivateRoute><RoleRedirect /></PrivateRoute>} />
-
           <Route path="/host" element={
             <PrivateRoute role="host">
               <Layout><HostDashboard /></Layout>
             </PrivateRoute>
           } />
-
           <Route path="/listings/:id" element={
             <PrivateRoute role="host">
               <Layout><ListingDetail /></Layout>
             </PrivateRoute>
           } />
-
           <Route path="/cleaner" element={
             <PrivateRoute role="cleaner">
               <Layout><CleanerDashboard /></Layout>
             </PrivateRoute>
           } />
-
           <Route path="/jobs/:id" element={
             <PrivateRoute>
               <Layout><JobDetail /></Layout>
             </PrivateRoute>
           } />
           <Route path="/account" element={
-          <PrivateRoute>
-          <Layout><AccountPage /></Layout>
-          </PrivateRoute>
+            <PrivateRoute>
+              <Layout><AccountPage /></Layout>
+            </PrivateRoute>
           } />
-
+          <Route path="/accept-invite/:token" element={
+            <Layout><AcceptInvitePage /></Layout>
+          } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

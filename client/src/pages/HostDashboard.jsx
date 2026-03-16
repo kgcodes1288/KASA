@@ -2,6 +2,24 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 
+// ── Role Badge ───────────────────────────────────────────────────────────────
+function RoleBadge({ role }) {
+  const isCoHost = role === 'COHOST';
+  return (
+    <span style={{
+      fontSize: 11,
+      fontWeight: 600,
+      padding: '3px 8px',
+      borderRadius: 20,
+      backgroundColor: isCoHost ? '#ede9fe' : '#f0fdf4',
+      color: isCoHost ? '#6d28d9' : '#15803d',
+      border: `1px solid ${isCoHost ? '#c4b5fd' : '#86efac'}`,
+    }}>
+      {isCoHost ? 'Co-host' : 'View Only'}
+    </span>
+  );
+}
+
 // ── Mini Calendar Component ──────────────────────────────────────────────────
 function MiniCalendar({ jobs }) {
   const today = new Date();
@@ -169,9 +187,82 @@ function ListingModal({ onClose, onSaved, listing }) {
   );
 }
 
+// ── Listing Card ─────────────────────────────────────────────────────────────
+function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, syncing, expandedCalendars, toggleCalendar }) {
+  const showCal = expandedCalendars[l.id];
+  const canEdit = isOwner || coHostRole === 'COHOST';
+
+  return (
+    <div key={l.id} className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div>
+          <h3 style={{ marginBottom: 2 }}>{l.name}</h3>
+          {l.address && <p style={{ fontSize: 13 }}>📍 {l.address}</p>}
+          {!isOwner && l.host && (
+            <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 4 }}>
+              Owner: {l.host.name}
+            </p>
+          )}
+        </div>
+        {!isOwner && <RoleBadge role={coHostRole} />}
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14 }}>
+        {l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}
+      </div>
+
+      <div className="cluster">
+        <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
+          🛏 Manage rooms
+        </Link>
+        {canEdit && (
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
+              {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(l)}>
+              ✏️ Edit
+            </button>
+          </>
+        )}
+        {isOwner && (
+          <button className="btn btn-danger btn-sm" onClick={() => onDelete(l.id)}>
+            🗑
+          </button>
+        )}
+      </div>
+
+      <button
+        onClick={() => toggleCalendar(l.id)}
+        style={{
+          marginTop: 14,
+          width: '100%',
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '7px 12px',
+          fontSize: 13,
+          color: 'var(--ink-soft)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontFamily: 'var(--font-body)',
+        }}
+      >
+        <span>📅 Booking calendar {listingJobs.length > 0 ? `· ${listingJobs.length} jobs synced` : '· no jobs yet'}</span>
+        <span>{showCal ? '▲' : '▼'}</span>
+      </button>
+
+      {showCal && <MiniCalendar jobs={listingJobs} />}
+    </div>
+  );
+}
+
 // ── Host Dashboard ───────────────────────────────────────────────────────────
 export default function HostDashboard() {
   const [listings, setListings] = useState([]);
+  const [coHostedListings, setCoHostedListings] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -181,10 +272,15 @@ export default function HostDashboard() {
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.get('/listings'), api.get('/jobs')])
-      .then(([lRes, jRes]) => {
+    Promise.all([
+      api.get('/listings'),
+      api.get('/jobs'),
+      api.get('/cohosts/my-listings'),
+    ])
+      .then(([lRes, jRes, cRes]) => {
         setListings(lRes.data);
         setJobs(jRes.data);
+        setCoHostedListings(cRes.data);
       })
       .finally(() => setLoading(false));
   };
@@ -213,6 +309,8 @@ export default function HostDashboard() {
   const jobsForListing = (listingId) =>
     jobs.filter((j) => j.listing?.id === listingId || j.listing === listingId);
 
+  const allEmpty = listings.length === 0 && coHostedListings.length === 0;
+
   return (
     <div className="page">
       <div className="section-header">
@@ -226,75 +324,69 @@ export default function HostDashboard() {
       </div>
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>
-      ) : listings.length === 0 ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <div className="spinner" />
+        </div>
+      ) : allEmpty ? (
         <div className="empty-state">
           <div style={{ fontSize: 40 }}>🏠</div>
           <h3>No listings yet</h3>
           <p>Create your first listing to get started</p>
         </div>
       ) : (
-        <div className="grid-2">
-          {listings.map((l) => {
-            const listingJobs = jobsForListing(l.id);
-            const showCal = expandedCalendars[l.id];
-
-            return (
-              <div key={l.id} className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div>
-                    <h3 style={{ marginBottom: 2 }}>{l.name}</h3>
-                    {l.address && <p style={{ fontSize: 13 }}>📍 {l.address}</p>}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14 }}>
-                  {l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}
-                </div>
-
-                <div className="cluster">
-                  <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
-                    🛏 Manage rooms
-                  </Link>
-                  <button className="btn btn-secondary btn-sm" onClick={() => handleSync(l.id)} disabled={syncing[l.id]}>
-                    {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
-                  </button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditTarget(l); setShowModal(true); }}>
-                    ✏️ Edit
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(l.id)}>
-                    🗑
-                  </button>
-                </div>
-
-                {/* Calendar toggle button */}
-                <button
-                  onClick={() => toggleCalendar(l.id)}
-                  style={{
-                    marginTop: 14,
-                    width: '100%',
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    padding: '7px 12px',
-                    fontSize: 13,
-                    color: 'var(--ink-soft)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontFamily: 'var(--font-body)',
-                  }}
-                >
-                  <span>📅 Booking calendar {listingJobs.length > 0 ? `· ${listingJobs.length} jobs synced` : '· no jobs yet'}</span>
-                  <span>{showCal ? '▲' : '▼'}</span>
-                </button>
-
-                {showCal && <MiniCalendar jobs={listingJobs} />}
+        <>
+          {/* Owned listings */}
+          {listings.length > 0 && (
+            <>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 16 }}>
+                My Properties
+              </h2>
+              <div className="grid-2" style={{ marginBottom: 32 }}>
+                {listings.map((l) => (
+                  <ListingCard
+                    key={l.id}
+                    l={l}
+                    isOwner={true}
+                    coHostRole={null}
+                    listingJobs={jobsForListing(l.id)}
+                    onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
+                    onDelete={handleDelete}
+                    onSync={handleSync}
+                    syncing={syncing}
+                    expandedCalendars={expandedCalendars}
+                    toggleCalendar={toggleCalendar}
+                  />
+                ))}
               </div>
-            );
-          })}
-        </div>
+            </>
+          )}
+
+          {/* Co-hosted listings */}
+          {coHostedListings.length > 0 && (
+            <>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 16 }}>
+                Shared With Me
+              </h2>
+              <div className="grid-2">
+                {coHostedListings.map((l) => (
+                  <ListingCard
+                    key={l.id}
+                    l={l}
+                    isOwner={false}
+                    coHostRole={l.coHostRole}
+                    listingJobs={jobsForListing(l.id)}
+                    onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
+                    onDelete={handleDelete}
+                    onSync={handleSync}
+                    syncing={syncing}
+                    expandedCalendars={expandedCalendars}
+                    toggleCalendar={toggleCalendar}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {showModal && (
