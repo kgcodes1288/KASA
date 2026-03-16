@@ -80,6 +80,16 @@ function CoHostSection() {
     load();
   };
 
+  const handleWithdraw = async (listingId, coHostId) => {
+  if (!window.confirm('Withdraw this invite?')) return;
+  try {
+    await api.delete(`/listings/${listingId}/cohosts/invite/${coHostId}`);
+    load();
+  } catch (err) {
+    alert(err.response?.data?.error || 'Failed to withdraw invite');
+  }
+};
+
   const handleLeave = async (listingId) => {
     if (!window.confirm('Leave this listing?')) return;
     await api.delete(`/listings/${listingId}/cohosts/${user.id}`);
@@ -115,24 +125,37 @@ function CoHostSection() {
                         <p style={styles.emptyText}>No co-hosts yet.</p>
                       ) : (
                         <div style={{ marginBottom: 16 }}>
-                          {l.coHosts.map((ch) => (
-                            <div key={ch.id} style={styles.coHostRow}>
-                              <div>
-                                <span style={{ fontSize: 14, fontWeight: 500 }}>
-                                  {ch.user?.name || ch.invitePhone}
-                                </span>
-                                <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
-                                <span style={styles.roleBadge(ch.role)}>
-                                  {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
-                                </span>
-                              </div>
-                              {ch.userId && (
-                                <button className="btn btn-danger btn-sm" onClick={() => handleRemove(l.id, ch.userId)}>
+                        {l.coHosts.map((ch) => (
+                          <div key={ch.id} style={styles.coHostRow}>
+                            <div>
+                              <span style={{ fontSize: 14, fontWeight: 500 }}>
+                                {ch.user?.name || ch.invitePhone}
+                              </span>
+                              <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
+                              <span style={styles.roleBadge(ch.role)}>
+                                {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {ch.status === 'PENDING' && (
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleWithdraw(l.id, ch.id)}
+                                >
+                                  Withdraw
+                                </button>
+                              )}
+                              {ch.status === 'ACCEPTED' && ch.userId && (
+                                <button
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => handleRemove(l.id, ch.userId)}
+                                >
                                   Remove
                                 </button>
                               )}
                             </div>
-                          ))}
+                          </div>
+                        ))}
                         </div>
                       )}
                       <div style={styles.inviteForm}>

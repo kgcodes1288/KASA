@@ -213,4 +213,28 @@ router.get('/my-listings', authenticate, async (req, res) => {
   res.json(listings);
 });
 
+
+// DELETE /api/listings/:id/cohosts/invite/:coHostId
+// Owner withdraws a pending invite by record id
+router.delete('/:id/cohosts/invite/:coHostId', authenticate, async (req, res) => {
+  const { id: listingId, coHostId } = req.params;
+
+  const listingRole = await getListingRole(listingId, req.user.id);
+  if (listingRole !== 'OWNER') {
+    return res.status(403).json({ error: 'Only the listing owner can withdraw invites.' });
+  }
+
+  const coHost = await prisma.listingCoHost.findFirst({
+    where: { id: coHostId, listingId },
+  });
+
+  if (!coHost) {
+    return res.status(404).json({ error: 'Invite not found.' });
+  }
+
+  await prisma.listingCoHost.delete({ where: { id: coHostId } });
+
+  res.json({ message: 'Invite withdrawn.' });
+});
+
 module.exports = router;
