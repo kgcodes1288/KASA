@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import './AccountPage.css';
 
@@ -7,15 +8,12 @@ import './AccountPage.css';
 function CoHostSection() {
   const { user } = useAuth();
 
-  // Listings I own — with their co-hosts
-  const [myListings, setMyListings]       = useState([]);
+  const [myListings, setMyListings]             = useState([]);
   const [coHostedListings, setCoHostedListings] = useState([]);
-  const [loading, setLoading]             = useState(true);
-
-  // Invite form state per listing
-  const [inviteForm, setInviteForm]       = useState({});  // { [listingId]: { phone, role, loading, msg } }
-  const [expandedListing, setExpandedListing] = useState(null);
-  const [inviteLinks, setInviteLinks]     = useState({});  // { [listingId]: url }
+  const [loading, setLoading]                   = useState(true);
+  const [inviteForm, setInviteForm]             = useState({});
+  const [expandedListing, setExpandedListing]   = useState(null);
+  const [inviteLinks, setInviteLinks]           = useState({});
 
   const load = async () => {
     setLoading(true);
@@ -24,7 +22,6 @@ function CoHostSection() {
         api.get('/listings'),
         api.get('/cohosts/my-listings'),
       ]);
-      // For each owned listing, also fetch its co-hosts
       const withCoHosts = await Promise.all(
         lRes.data.map(async (l) => {
           const chRes = await api.get(`/listings/${l.id}/cohosts`);
@@ -52,21 +49,17 @@ function CoHostSection() {
   const handleInvite = async (listingId) => {
     const form = inviteForm[listingId] || {};
     if (!form.phone || !form.role) return;
-
     setField(listingId, 'loading', true);
     setField(listingId, 'msg', null);
     setInviteLinks((prev) => ({ ...prev, [listingId]: null }));
-
     try {
       const { data } = await api.post(`/listings/${listingId}/cohosts/invite`, {
         phone: form.phone,
         role: form.role,
       });
-
       if (!data.smsSent && data.inviteUrl) {
         setInviteLinks((prev) => ({ ...prev, [listingId]: data.inviteUrl }));
       }
-
       setField(listingId, 'msg', { type: 'success', text: data.message });
       setField(listingId, 'phone', '');
       setField(listingId, 'role', '');
@@ -99,7 +92,6 @@ function CoHostSection() {
     <section className="account-section">
       <h2>Co-host Access</h2>
 
-      {/* ── Listings I Share ── */}
       {myListings.length > 0 && (
         <div style={{ marginBottom: 28 }}>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 12 }}>
@@ -109,23 +101,16 @@ function CoHostSection() {
             {myListings.map((l) => {
               const form = inviteForm[l.id] || {};
               const isOpen = expandedListing === l.id;
-
               return (
                 <div key={l.id} style={styles.listingBlock}>
-                  <div
-                    style={styles.listingHeader}
-                    onClick={() => toggleListing(l.id)}
-                  >
+                  <div style={styles.listingHeader} onClick={() => toggleListing(l.id)}>
                     <span style={{ fontWeight: 600, fontSize: 14 }}>{l.name}</span>
                     <span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>
                       {l.coHosts.length} co-host{l.coHosts.length !== 1 ? 's' : ''} {isOpen ? '▲' : '▼'}
                     </span>
                   </div>
-
                   {isOpen && (
                     <div style={{ padding: '12px 16px' }}>
-
-                      {/* Current co-hosts */}
                       {l.coHosts.length === 0 ? (
                         <p style={styles.emptyText}>No co-hosts yet.</p>
                       ) : (
@@ -136,18 +121,13 @@ function CoHostSection() {
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>
                                   {ch.user?.name || ch.invitePhone}
                                 </span>
-                                <span style={styles.statusBadge(ch.status)}>
-                                  {ch.status}
-                                </span>
+                                <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
                                 <span style={styles.roleBadge(ch.role)}>
                                   {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
                                 </span>
                               </div>
                               {ch.userId && (
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => handleRemove(l.id, ch.userId)}
-                                >
+                                <button className="btn btn-danger btn-sm" onClick={() => handleRemove(l.id, ch.userId)}>
                                   Remove
                                 </button>
                               )}
@@ -155,8 +135,6 @@ function CoHostSection() {
                           ))}
                         </div>
                       )}
-
-                      {/* Invite form */}
                       <div style={styles.inviteForm}>
                         <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>Invite a co-host</p>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -185,14 +163,11 @@ function CoHostSection() {
                             {form.loading ? 'Sending…' : 'Send Invite'}
                           </button>
                         </div>
-
                         {form.msg && (
                           <p className={`form-msg ${form.msg.type}`} style={{ marginTop: 8 }}>
                             {form.msg.text}
                           </p>
                         )}
-
-                        {/* Manual invite link fallback */}
                         {inviteLinks[l.id] && (
                           <div style={styles.inviteLinkBox}>
                             <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
@@ -224,7 +199,6 @@ function CoHostSection() {
         </div>
       )}
 
-      {/* ── Listings Shared With Me ── */}
       {coHostedListings.length > 0 && (
         <div>
           <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 12 }}>
@@ -242,10 +216,7 @@ function CoHostSection() {
                     {l.coHostRole === 'COHOST' ? 'Co-host' : 'View Only'}
                   </span>
                 </div>
-                <button
-                  className="btn btn-danger btn-sm"
-                  onClick={() => handleLeave(l.id)}
-                >
+                <button className="btn btn-danger btn-sm" onClick={() => handleLeave(l.id)}>
                   Leave
                 </button>
               </div>
@@ -256,6 +227,89 @@ function CoHostSection() {
 
       {myListings.length === 0 && coHostedListings.length === 0 && (
         <p style={styles.emptyText}>No co-host activity yet.</p>
+      )}
+    </section>
+  );
+}
+
+// ── Delete Account Section ───────────────────────────────────────────────────
+function DeleteAccountSection() {
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  const [password, setPassword]     = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [confirming, setConfirming] = useState(false);
+
+  const handleDelete = async () => {
+    if (!password) return;
+    setLoading(true);
+    setError('');
+    try {
+      await api.delete('/auth/account', { data: { password } });
+      logout();
+      navigate('/login');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete account');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="account-section" style={{ borderTop: '2px solid #fee2e2' }}>
+      <h2 style={{ color: '#991b1b' }}>Delete Account</h2>
+      {!confirming ? (
+        <div>
+          <p style={{ fontSize: 14, color: 'var(--ink-soft)', marginBottom: 16 }}>
+            Permanently deletes your account, all listings, rooms, jobs, and cleaning history. This cannot be undone.
+          </p>
+          <button className="btn btn-danger" onClick={() => setConfirming(true)}>
+            Delete my account
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p style={{ fontSize: 14, color: '#991b1b', marginBottom: 16, fontWeight: 500 }}>
+            Enter your password to confirm. This action is permanent and cannot be undone.
+          </p>
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label htmlFor="deletePassword">Your password</label>
+            <input
+              id="deletePassword"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.75rem',
+                border: '1px solid #fca5a5',
+                borderRadius: 8,
+                fontSize: '0.95rem',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          {error && <p className="form-msg error" style={{ marginBottom: 12 }}>{error}</p>}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setConfirming(false); setPassword(''); setError(''); }}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleDelete}
+              disabled={loading || !password}
+            >
+              {loading ? 'Deleting…' : 'Confirm Delete'}
+            </button>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -335,7 +389,6 @@ const styles = {
 export default function AccountPage() {
   const { user, updateUser } = useAuth();
 
-  // ── Profile form ──
   const [profile, setProfile] = useState({
     name:  user?.name  || '',
     email: user?.email || '',
@@ -344,11 +397,10 @@ export default function AccountPage() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg]         = useState(null);
 
-  // ── Password form ──
   const [passwords, setPasswords] = useState({
-    currentPassword:  '',
-    newPassword:      '',
-    confirmPassword:  '',
+    currentPassword: '',
+    newPassword:     '',
+    confirmPassword: '',
   });
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMsg, setPwMsg]         = useState(null);
@@ -491,6 +543,9 @@ export default function AccountPage() {
 
         {/* ── Co-host Access Section (hosts only) ── */}
         {user?.role === 'host' && <CoHostSection />}
+
+        {/* ── Delete Account ── */}
+        <DeleteAccountSection />
 
       </div>
     </div>

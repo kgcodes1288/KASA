@@ -15,15 +15,12 @@ router.post('/register', async (req, res) => {
     const { name, email, password, role, phone } = req.body;
     if (!name || !email || !password || !role)
       return res.status(400).json({ message: 'name, email, password, role are required' });
-
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(400).json({ message: 'Email already registered' });
-
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { name, email, password: hashed, role, phone: phone || null },
     });
-
     res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -36,11 +33,9 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password required' });
-
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ message: 'Invalid credentials' });
-
     res.json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -52,25 +47,20 @@ router.get('/me', auth, (req, res) => {
   res.json(safeUser(req.user));
 });
 
-
 // PUT /api/auth/profile
 router.put('/profile', auth, async (req, res) => {
   try {
     const { name, email, phone } = req.body;
     if (!name || !email)
       return res.status(400).json({ message: 'Name and email are required' });
-
-    // If email is changing, make sure it's not already taken
     if (email !== req.user.email) {
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) return res.status(400).json({ message: 'Email already in use' });
     }
-
     const updated = await prisma.user.update({
       where: { id: req.user.id },
       data: { name, email, phone: phone || null },
     });
-
     res.json(safeUser(updated));
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -85,24 +75,38 @@ router.put('/password', auth, async (req, res) => {
       return res.status(400).json({ message: 'Both fields are required' });
     if (newPassword.length < 6)
       return res.status(400).json({ message: 'New password must be at least 6 characters' });
-
     const isMatch = await bcrypt.compare(currentPassword, req.user.password);
     if (!isMatch)
       return res.status(401).json({ message: 'Current password is incorrect' });
-
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: req.user.id },
       data: { password: hashed },
     });
-
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// DELETE /api/auth/account
+router.delete('/account', auth, async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password)
+      return res.status(400).json({ message: 'Password is required to delete your account' });
 
+    const isMatch = await bcrypt.compare(password, req.user.password);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Incorrect password' });
 
+    // Cascades handle listings, rooms, jobs, co-hosts via onDelete: Cascade
+    await prisma.user.delete({ where: { id: req.user.id } });
+
+    res.json({ message: 'Account deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
