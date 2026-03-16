@@ -9,18 +9,36 @@ const signToken = (id) =>
 
 const safeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone });
 
+
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role, phone } = req.body;
     if (!name || !email || !password || !role)
       return res.status(400).json({ message: 'name, email, password, role are required' });
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(400).json({ message: 'Email already registered' });
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { name, email, password: hashed, role, phone: phone || null },
     });
+
+    // Auto-accept any pending co-host invites matching this phone number
+    if (phone) {
+      await prisma.listingCoHost.updateMany({
+        where: {
+          invitePhone: phone,
+          status: 'PENDING',
+        },
+        data: {
+          userId: user.id,
+          status: 'ACCEPTED',
+        },
+      });
+    }
+
     res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
