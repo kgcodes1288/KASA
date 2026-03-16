@@ -9,6 +9,8 @@ const signToken = (id) =>
 
 const safeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone });
 
+const normalizePhone = (phone) => phone ? phone.replace(/\s+/g, '').trim() : null;
+
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -22,14 +24,14 @@ router.post('/register', async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, role, phone: phone || null },
+      data: { name, email, password: hashed, role, phone: normalizePhone(phone) || null },
     });
 
     // Auto-accept any pending co-host invites matching this phone number
     if (phone) {
       await prisma.listingCoHost.updateMany({
         where: {
-          invitePhone: phone,
+          invitePhone: normalizePhone(phone),
           status: 'PENDING',
         },
         data: {
@@ -77,7 +79,7 @@ router.put('/profile', auth, async (req, res) => {
     }
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { name, email, phone: phone || null },
+      data: { name, email, phone: normalizePhone(phone) || null },
     });
     res.json(safeUser(updated));
   } catch (err) {

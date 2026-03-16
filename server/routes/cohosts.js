@@ -11,6 +11,7 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+const normalizePhone = (phone) => phone ? phone.replace(/\s+/g, '').trim() : null;
 
 // Helper — check what role a user has on a listing
 async function getListingRole(listingId, userId) {
@@ -33,7 +34,8 @@ async function getListingRole(listingId, userId) {
 // Owner invites someone by phone number with a role
 router.post('/:id/cohosts/invite', authenticate, async (req, res) => {
   const { id: listingId } = req.params;
-  const { phone, role } = req.body;
+  const { phone: rawPhone, role } = req.body;
+  const phone = normalizePhone(rawPhone);
   const requesterId = req.user.id;
 
   if (!phone || !role) {
