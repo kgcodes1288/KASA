@@ -3,9 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const prisma = require('./lib/prisma');
 const { startPoller } = require('./services/icalPoller');
+const { listingRouter, taskRouter } = require('./routes/maintenance');
 
 const app = express();
-
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
@@ -13,13 +13,15 @@ app.use(cors({
 app.use(express.json());
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/listings', require('./routes/listings'));
-app.use('/api/listings', require('./routes/cohosts')); 
-app.use('/api/rooms', require('./routes/rooms'));
-app.use('/api/jobs', require('./routes/jobs'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/cohosts', require('./routes/cohosts'));
+app.use('/api/listings', require('./routes/cohosts'));
+app.use('/api/listings', listingRouter);
+app.use('/api/rooms',    require('./routes/rooms'));
+app.use('/api/jobs',     require('./routes/jobs'));
+app.use('/api/users',    require('./routes/users'));
+app.use('/api/cohosts',  require('./routes/cohosts'));
+app.use('/api/maintenance', taskRouter);
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
@@ -35,5 +37,4 @@ async function main() {
     process.exit(1);
   }
 }
-
 main();

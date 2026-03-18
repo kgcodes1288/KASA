@@ -10,7 +10,6 @@ router.get('/listing/:listingId', auth, async (req, res) => {
       include: { checklistItems: { orderBy: { order: 'asc' } } },
       orderBy: { name: 'asc' },
     });
-    // Rename checklistItems -> checklist for frontend compatibility
     res.json(rooms.map((r) => ({ ...r, checklist: r.checklistItems })));
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -21,13 +20,15 @@ router.get('/listing/:listingId', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const { listing: listingId, name, checklist } = req.body;
+    const { listing: listingId, name, entityType, checklist } = req.body;
     const listing = await prisma.listing.findFirst({ where: { id: listingId, hostId: req.user.id } });
     if (!listing) return res.status(403).json({ message: 'Not your listing' });
 
+    const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
     const room = await prisma.room.create({
       data: {
         name,
+        entityType: validTypes.includes(entityType) ? entityType : 'ROOM',
         listingId,
         checklistItems: {
           create: (checklist || []).map((text, i) => ({ text, order: i })),
@@ -49,15 +50,15 @@ router.put('/:id', auth, async (req, res) => {
     if (!room) return res.status(404).json({ message: 'Room not found' });
     if (room.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Not your listing' });
 
-    const { name, checklist } = req.body;
+    const { name, entityType, checklist } = req.body;
+    const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
 
-    // Delete old items and recreate — simplest approach
     await prisma.checklistTemplate.deleteMany({ where: { roomId: req.params.id } });
-
     const updated = await prisma.room.update({
       where: { id: req.params.id },
       data: {
         name: name || room.name,
+        entityType: validTypes.includes(entityType) ? entityType : room.entityType,
         checklistItems: {
           create: (checklist || []).map((item, i) => ({
             text: typeof item === 'string' ? item : item.text,
@@ -80,7 +81,6 @@ router.delete('/:id', auth, async (req, res) => {
     const room = await prisma.room.findUnique({ where: { id: req.params.id }, include: { listing: true } });
     if (!room) return res.status(404).json({ message: 'Room not found' });
     if (room.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Not your listing' });
-
     await prisma.room.delete({ where: { id: req.params.id } });
     res.json({ message: 'Room deleted' });
   } catch (err) {

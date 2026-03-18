@@ -21,6 +21,7 @@ model User {
   cleaning  ListingCleaner[]
   jobs      Job[]
   coHosting ListingCoHost[]    @relation("CoHostUser")
+  maintenanceTasks MaintenanceTask[]
 }
 
 enum Role {
@@ -43,6 +44,7 @@ model Listing {
   cleaners    ListingCleaner[]
   jobs        Job[]
   coHosts     ListingCoHost[]  @relation("CoHostListing")
+  maintenanceTasks MaintenanceTask[]
 }
 
 model ListingCoHost {
@@ -80,16 +82,50 @@ model ListingCleaner {
   @@id([listingId, cleanerId])
 }
 
-model Room {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  listingId String
+enum EntityType {
+  ROOM
+  APPLIANCE
+  SPACE
+}
 
-  listing        Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  checklistItems ChecklistTemplate[]
-  jobs           Job[]
+model Room {
+  id         String     @id @default(cuid())
+  name       String
+  entityType EntityType @default(ROOM)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  listingId  String
+
+  listing          Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  checklistItems   ChecklistTemplate[]
+  jobs             Job[]
+  maintenanceTasks MaintenanceTask[]
+}
+
+model MaintenanceTask {
+  id               String        @id @default(cuid())
+  title            String
+  notes            String?
+  intervalMonths   Int
+  lastServicedAt   DateTime?
+  nextDueAt        DateTime
+  status           TaskStatus    @default(PENDING)
+  notificationSent Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  listingId        String
+  roomId           String?
+  assignedUserId   String?
+
+  listing      Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  room         Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  assignedUser User?    @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+}
+
+enum TaskStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
 }
 
 model ChecklistTemplate {
