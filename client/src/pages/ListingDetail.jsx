@@ -67,8 +67,8 @@ function RoomModal({ listingId, onClose, onSaved, room }) {
 
 /* ── Add Cleaning Task modal ── */
 function AddChecklistItemModal({ room, onClose, onSaved }) {
-  const [text, setText]   = useState('');
-  const [error, setError] = useState('');
+  const [text, setText]     = useState('');
+  const [error, setError]   = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -263,18 +263,16 @@ const ENTITY_GROUPS = [
   { type: 'SPACE',     icon: '🌿', label: 'Spaces' },
 ];
 
-/* ── section styles ── */
 const CLEANING_SECTION = {
-  wrapper:  { background: '#f0f9ff', borderRadius: 8, padding: '12px 14px', marginBottom: 16 },
-  header:   { fontSize: 13, fontWeight: 600, color: '#0369a1', marginBottom: 10 },
-  item:     { fontSize: 13, padding: '5px 10px', background: '#e0f2fe',
-              borderRadius: 6, border: '1px solid #bae6fd', color: '#0c4a6e' },
+  wrapper: { background: '#f0f9ff', borderRadius: 8, padding: '12px 14px', marginBottom: 16 },
+  header:  { fontSize: 13, fontWeight: 600, color: '#0369a1', marginBottom: 10 },
+  item:    { fontSize: 13, padding: '5px 10px', background: '#e0f2fe',
+             borderRadius: 6, border: '1px solid #bae6fd', color: '#0c4a6e' },
 };
 const MAINT_SECTION = {
-  wrapper:  { background: '#fffbeb', borderRadius: 8, padding: '12px 14px' },
-  header:   { fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 10 },
-  item:     { padding: '10px 12px', background: '#fef3c7',
-              borderRadius: 8, border: '1px solid #fde68a' },
+  wrapper: { background: '#fffbeb', borderRadius: 8, padding: '12px 14px' },
+  header:  { fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 10 },
+  item:    { padding: '10px 12px', background: '#fef3c7', borderRadius: 8, border: '1px solid #fde68a' },
 };
 
 /* ── Main component ── */
@@ -321,7 +319,7 @@ export default function ListingDetail() {
 
   useEffect(() => { load(); }, [id]);
 
-useEffect(() => {
+  useEffect(() => {
     if (tab === 'spaces' || tab === 'jobs') loadMaintenance();
   }, [tab]);
 
@@ -432,7 +430,6 @@ useEffect(() => {
 
                       return (
                         <div key={entity.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-
                           {/* Entity header */}
                           <div
                             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -586,9 +583,7 @@ useEffect(() => {
       )}
 
       {/* ── Jobs tab ── */}
-{/* ── Jobs tab ── */}
       {tab === 'jobs' && (() => {
-        // Flatten maintenance tasks into unified list
         const maintItems = maintRooms.flatMap((r) =>
           (r.maintenanceTasks || []).map((t) => ({
             _type: 'maintenance',
@@ -651,9 +646,9 @@ useEffect(() => {
             ) : (
               <div className="stack">
                 {allItems.map((item) => {
-                  const isJob       = item._type === 'job';
-                  const isDone      = item.status === 'completed' || item.status === 'COMPLETED';
-                  const colorSet    = isJob
+                  const isJob    = item._type === 'job';
+                  const isDone   = item.status === 'completed' || item.status === 'COMPLETED';
+                  const colorSet = isJob
                     ? (isDone ? JOB_COLORS.done   : JOB_COLORS.active)
                     : (isDone ? MAINT_COLORS.done  : MAINT_COLORS.active);
 
@@ -666,9 +661,7 @@ useEffect(() => {
                             <span style={{ fontSize: 13, fontWeight: 700 }}>
                               {isJob ? '🧹' : '🔧'} {item.roomName}
                             </span>
-                            <span style={{ fontSize: 12, fontWeight: 400 }}>
-                              {isJob ? `— ${item.title}` : `— ${item.title}`}
-                            </span>
+                            <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.title}</span>
                           </div>
                           <p style={{ fontSize: 12, marginBottom: 2 }}>
                             📅 {new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
