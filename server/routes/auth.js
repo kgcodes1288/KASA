@@ -27,19 +27,20 @@ router.post('/register', async (req, res) => {
       data: { name, email, password: hashed, role, phone: normalizePhone(phone) || null },
     });
 
-    // Auto-accept any pending co-host invites matching this phone number
-    if (phone) {
-      await prisma.listingCoHost.updateMany({
-        where: {
-          invitePhone: normalizePhone(phone),
-          status: 'PENDING',
-        },
-        data: {
-          userId: user.id,
-          status: 'ACCEPTED',
-        },
-      });
-    }
+// Auto-link any pending co-host invites matching this phone number
+// Status stays PENDING — user accepts/declines from Account page
+if (phone) {
+  await prisma.listingCoHost.updateMany({
+    where: {
+      invitePhone: normalizePhone(phone),
+      status: 'PENDING',
+      userId: null,
+    },
+    data: {
+      userId: user.id,
+    },
+  });
+}
 
     res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {

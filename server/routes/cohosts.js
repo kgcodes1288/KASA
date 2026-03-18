@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-const authenticate = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
+const authenticate2 = require('../middleware/auth');
 const crypto = require('crypto');
 const twilio = require('twilio');
 
@@ -31,8 +32,7 @@ async function getListingRole(listingId, userId) {
 }
 
 // POST /api/listings/:id/cohosts/invite
-// Owner invites someone by phone number with a role
-router.post('/:id/cohosts/invite', authenticate, async (req, res) => {
+router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const { id: listingId } = req.params;
   const { phone: rawPhone, role } = req.body;
   const phone = normalizePhone(rawPhone);
@@ -51,13 +51,9 @@ router.post('/:id/cohosts/invite', authenticate, async (req, res) => {
     return res.status(403).json({ error: 'Only the listing owner can invite co-hosts.' });
   }
 
-  // Don't invite yourself
-  if (phone === req.user.phone) {
+  if (phone === normalizePhone(req.user.phone)) {
     return res.status(400).json({ error: 'You cannot invite yourself.' });
   }
-
-  // Look up invitee by phone
-  const invitee = await prisma.user.findFirst({ where: { phone } });
 
   // Check if already invited/accepted
   const existing = await prisma.listingCoHost.findFirst({
@@ -72,9 +68,10 @@ router.post('/:id/cohosts/invite', authenticate, async (req, res) => {
     return res.status(409).json({ error: 'This phone number already has a pending or active invite for this listing.' });
   }
 
-  const inviteToken = crypto.randomBytes(32).toString('hex');
-  const inviteUrl = `${process.env.CLIENT_URL}/accept-invite/${inviteToken}`;
+  // Check if invitee already has an account
+  const invitee = await prisma.user.findFirst({ where: { phone } });
 
+  const inviteToken = crypto.randomBytes(32).toString('hex');
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
 
   const coHost = await prisma.listingCoHost.create({
@@ -88,33 +85,21 @@ router.post('/:id/cohosts/invite', authenticate, async (req, res) => {
     },
   });
 
-  // If invitee has an account, SMS them the link
-  if (invitee) {
-    await twilioClient.messages.create({
-      body: `Hi ${invitee.name}, ${req.user.name} has invited you to co-host "${listing.name}" on CleanStay. Tap to accept: ${inviteUrl}`,
-      from: `whatsapp:${process.env.TWILIO_PHONE}`,
-      to: `whatsapp:${phone}`,
-    });
+  // Always send WhatsApp — link goes to login, which redirects to account page
+  const link = `${process.env.CLIENT_URL}/login?redirect=/account`;
+  const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
 
-    return res.status(201).json({
-      message: 'Invite sent via SMS.',
-      smsSent: true,
-      coHost,
-    });
-  }
-
-  // No account found — return the link for the owner to share manually
-  return res.status(201).json({
-    message: 'No account found for that phone number. Share this link manually.',
-    smsSent: false,
-    inviteUrl,
-    coHost,
+  await twilioClient.messages.create({
+    body: `Hi! ${req.user.name} has invited you to co-host "${listing.name}" on CleanStay as ${roleLabel}. Tap to join: ${link}`,
+    from: `whatsapp:${process.env.TWILIO_PHONE}`,
+    to: `whatsapp:${phone}`,
   });
+
+  res.status(201).json({ message: 'Invite sent via WhatsApp.', coHost });
 });
 
 // GET /api/listings/:id/cohosts
-// Owner sees all co-hosts for a listing
-router.get('/:id/cohosts', authenticate, async (req, res) => {
+router.get('/:id/cohosts', authenticate2, async (req, res) => {
   const { id: listingId } = req.params;
 
   const listingRole = await getListingRole(listingId, req.user.id);
@@ -131,9 +116,87 @@ router.get('/:id/cohosts', authenticate, async (req, res) => {
   res.json(coHosts);
 });
 
+// GET /api/cohosts/my-listings
+router.get('/my-listings', authenticate2, async (req, res) => {
+  const coHosted = await prisma.listingCoHost.findMany({
+    where: { userId: req.user.id, status: 'ACCEPTED' },
+    include: {
+      listing: {
+        include: {
+          host: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  const listings = coHosted.map((c) => ({
+    ...c.listing,
+    coHostRole: c.role,
+  }));
+
+  res.json(listings);
+});
+
+// GET /api/cohosts/pending
+// Returns pending invites for the logged-in user
+router.get('/pending', authenticate2, async (req, res) => {
+  const pending = await prisma.listingCoHost.findMany({
+    where: { userId: req.user.id, status: 'PENDING' },
+    include: {
+      listing: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true } },
+    },
+  });
+
+  // Also include host info
+  const withHost = await Promise.all(
+    pending.map(async (p) => {
+      const listing = await prisma.listing.findUnique({
+        where: { id: p.listingId },
+        include: { host: { select: { id: true, name: true } } },
+      });
+      return { ...p, listing };
+    })
+  );
+
+  res.json(withHost);
+});
+
+// POST /api/cohosts/:id/accept
+router.post('/:id/accept', authenticate2, async (req, res) => {
+  const coHost = await prisma.listingCoHost.findFirst({
+    where: { id: req.params.id, userId: req.user.id, status: 'PENDING' },
+  });
+
+  if (!coHost) {
+    return res.status(404).json({ error: 'Invite not found.' });
+  }
+
+  const updated = await prisma.listingCoHost.update({
+    where: { id: coHost.id },
+    data: { status: 'ACCEPTED' },
+  });
+
+  res.json({ message: 'Invite accepted.', coHost: updated });
+});
+
+// POST /api/cohosts/:id/decline
+router.post('/:id/decline', authenticate2, async (req, res) => {
+  const coHost = await prisma.listingCoHost.findFirst({
+    where: { id: req.params.id, userId: req.user.id, status: 'PENDING' },
+  });
+
+  if (!coHost) {
+    return res.status(404).json({ error: 'Invite not found.' });
+  }
+
+  await prisma.listingCoHost.delete({ where: { id: coHost.id } });
+
+  res.json({ message: 'Invite declined.' });
+});
+
 // DELETE /api/listings/:id/cohosts/:userId
-// Owner removes someone OR user removes themselves
-router.delete('/:id/cohosts/:userId', authenticate, async (req, res) => {
+router.delete('/:id/cohosts/:userId', authenticate2, async (req, res) => {
   const { id: listingId, userId: targetUserId } = req.params;
   const requesterId = req.user.id;
 
@@ -157,68 +220,8 @@ router.delete('/:id/cohosts/:userId', authenticate, async (req, res) => {
   res.json({ message: 'Co-host removed successfully.' });
 });
 
-// GET /api/cohosts/accept/:token
-// Accepts an invite — must be logged in
-router.get('/accept/:token', authenticate, async (req, res) => {
-  const { token } = req.params;
-
-  const coHost = await prisma.listingCoHost.findUnique({
-    where: { inviteToken: token },
-  });
-
-  if (!coHost) {
-    return res.status(404).json({ error: 'Invite not found or already used.' });
-  }
-
-  if (coHost.status === 'ACCEPTED') {
-    return res.status(400).json({ error: 'Invite already accepted.' });
-  }
-
-  if (coHost.invitePhone !== req.user.phone) {
-    return res.status(403).json({ error: 'This invite was sent to a different phone number.' });
-  }
-
-  const updated = await prisma.listingCoHost.update({
-    where: { id: coHost.id },
-    data: {
-      status: 'ACCEPTED',
-      userId: req.user.id,
-    },
-  });
-
-  res.json({ message: 'Invite accepted.', coHost: updated });
-});
-
-
-// GET /api/cohosts/my-listings
-// Returns all listings the logged-in user is a co-host on
-router.get('/my-listings', authenticate, async (req, res) => {
-  const coHosted = await prisma.listingCoHost.findMany({
-    where: {
-      userId: req.user.id,
-      status: 'ACCEPTED',
-    },
-    include: {
-      listing: {
-        include: {
-          host: { select: { id: true, name: true } },
-        },
-      },
-    },
-  });
-
-  const listings = coHosted.map((c) => ({
-    ...c.listing,
-    coHostRole: c.role,
-  }));
-
-  res.json(listings);
-});
-
-
 // DELETE /api/listings/:id/cohosts/invite/:coHostId
-// Owner withdraws a pending invite by record id
-router.delete('/:id/cohosts/invite/:coHostId', authenticate, async (req, res) => {
+router.delete('/:id/cohosts/invite/:coHostId', authenticate2, async (req, res) => {
   const { id: listingId, coHostId } = req.params;
 
   const listingRole = await getListingRole(listingId, req.user.id);

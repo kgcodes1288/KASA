@@ -17,14 +17,34 @@ const fmt = (j) => ({ ...j, checklist: j.checklistItems });
 router.get('/', auth, async (req, res) => {
   try {
     let where = {};
+
     if (req.user.role === 'cleaner') {
       where.cleanerId = req.user.id;
     } else {
-      where.listing = { hostId: req.user.id };
+      // Get listings the user owns OR is an accepted co-host on
+      const coHosted = await prisma.listingCoHost.findMany({
+        where: { userId: req.user.id, status: 'ACCEPTED' },
+        select: { listingId: true },
+      });
+
+      const coHostedIds = coHosted.map((c) => c.listingId);
+
+      where.listing = {
+        OR: [
+          { hostId: req.user.id },
+          { id: { in: coHostedIds } },
+        ],
+      };
     }
+
     if (req.query.status) where.status = req.query.status;
 
-    const jobs = await prisma.job.findMany({ where, orderBy: { checkoutDate: 'asc' }, ...jobInclude });
+    const jobs = await prisma.job.findMany({
+      where,
+      orderBy: { checkoutDate: 'asc' },
+      ...jobInclude,
+    });
+
     res.json(jobs.map(fmt));
   } catch (err) {
     res.status(500).json({ message: err.message });

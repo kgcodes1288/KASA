@@ -4,6 +4,105 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import './AccountPage.css';
 
+
+// ── Pending Invites Notification ─────────────────────────────────────────────
+function PendingInvites() {
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/cohosts/pending');
+      setInvites(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleAccept = async (id) => {
+    try {
+      await api.post(`/cohosts/${id}/accept`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to accept invite');
+    }
+  };
+
+  const handleDecline = async (id) => {
+    if (!window.confirm('Decline this invite?')) return;
+    try {
+      await api.post(`/cohosts/${id}/decline`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to decline invite');
+    }
+  };
+
+  if (loading || invites.length === 0) return null;
+
+  return (
+    <div style={{
+      marginBottom: 20,
+      borderRadius: 12,
+      overflow: 'hidden',
+      border: '1px solid #c4b5fd',
+      backgroundColor: '#faf5ff',
+    }}>
+      <div style={{
+        padding: '10px 16px',
+        backgroundColor: '#ede9fe',
+        fontSize: 13,
+        fontWeight: 600,
+        color: '#6d28d9',
+        borderBottom: '1px solid #c4b5fd',
+      }}>
+        🔔 You have {invites.length} pending co-host invite{invites.length !== 1 ? 's' : ''}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {invites.map((inv, i) => (
+          <div
+            key={inv.id}
+            style={{
+              padding: '14px 16px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: i < invites.length - 1 ? '1px solid #ede9fe' : 'none',
+            }}
+          >
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 500, color: '#111', marginBottom: 2 }}>
+                <strong>{inv.listing?.host?.name}</strong> invited you to co-host{' '}
+                <strong>{inv.listing?.name}</strong>
+              </p>
+              <p style={{ fontSize: 12, color: '#6d28d9' }}>
+                Role: {inv.role === 'COHOST' ? 'Co-host' : 'View Only'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 12 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => handleAccept(inv.id)}
+              >
+                Accept
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => handleDecline(inv.id)}
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Co-host Access Section ───────────────────────────────────────────────────
 function CoHostSection() {
   const { user } = useAuth();
@@ -57,9 +156,9 @@ function CoHostSection() {
         phone: form.phone,
         role: form.role,
       });
-      if (!data.smsSent && data.inviteUrl) {
-        setInviteLinks((prev) => ({ ...prev, [listingId]: data.inviteUrl }));
-      }
+      // if (!data.smsSent && data.inviteUrl) {
+      //   setInviteLinks((prev) => ({ ...prev, [listingId]: data.inviteUrl }));
+      // }
       setField(listingId, 'msg', { type: 'success', text: data.message });
       setField(listingId, 'phone', '');
       setField(listingId, 'role', '');
@@ -472,6 +571,8 @@ export default function AccountPage() {
   return (
     <div className="account-page">
       <div className="account-container">
+
+        <PendingInvites />
 
         <div className="account-header">
           <div className="account-avatar">
