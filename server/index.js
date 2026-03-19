@@ -6,6 +6,7 @@ const { startPoller } = require('./services/icalPoller');
 const { listingRouter, taskRouter } = require('./routes/maintenance');
 
 const app = express();
+
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
@@ -22,6 +23,7 @@ app.use('/api/jobs',        require('./routes/jobs'));
 app.use('/api/users',       require('./routes/users'));
 app.use('/api/cohosts',     require('./routes/cohosts'));
 app.use('/api/maintenance', taskRouter);
+app.use('/api/public',      require('./routes/public'));   // ← new
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
@@ -37,4 +39,5 @@ async function main() {
     process.exit(1);
   }
 }
+
 main();

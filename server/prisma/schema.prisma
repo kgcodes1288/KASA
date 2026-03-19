@@ -17,10 +17,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  listings  Listing[]          @relation("HostListings")
-  cleaning  ListingCleaner[]
+  listings  Listing[]       @relation("HostListings")
   jobs      Job[]
-  coHosting ListingCoHost[]    @relation("CoHostUser")
+  coHosting ListingCoHost[] @relation("CoHostUser")
   maintenanceTasks MaintenanceTask[]
 }
 
@@ -39,12 +38,12 @@ model Listing {
   updatedAt   DateTime  @updatedAt
   hostId      String
 
-  host        User             @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
-  rooms       Room[]
-  cleaners    ListingCleaner[]
-  jobs        Job[]
-  coHosts     ListingCoHost[]  @relation("CoHostListing")
+  host      User            @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+  rooms     Room[]
+  jobs      Job[]
+  coHosts   ListingCoHost[] @relation("CoHostListing")
   maintenanceTasks MaintenanceTask[]
+  jobTokens JobToken[]
 }
 
 model ListingCoHost {
@@ -72,16 +71,6 @@ enum CoHostStatus {
   DECLINED
 }
 
-model ListingCleaner {
-  listingId  String
-  cleanerId  String
-
-  listing    Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  cleaner    User    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
-
-  @@id([listingId, cleanerId])
-}
-
 enum EntityType {
   ROOM
   APPLIANCE
@@ -103,23 +92,23 @@ model Room {
 }
 
 model MaintenanceTask {
-  id               String        @id @default(cuid())
+  id               String     @id @default(cuid())
   title            String
   notes            String?
   intervalMonths   Int
   lastServicedAt   DateTime?
   nextDueAt        DateTime
-  status           TaskStatus    @default(PENDING)
-  notificationSent Boolean       @default(false)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  status           TaskStatus @default(PENDING)
+  notificationSent Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
   listingId        String
   roomId           String?
   assignedUserId   String?
 
-  listing      Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  room         Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  assignedUser User?    @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  room         Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  assignedUser User?   @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
 }
 
 enum TaskStatus {
@@ -170,4 +159,16 @@ model JobChecklist {
   jobId       String
 
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model JobToken {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  phone        String
+  checkoutDate DateTime
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  listingId    String
+
+  listing      Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 }

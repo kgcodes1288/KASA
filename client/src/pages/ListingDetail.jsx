@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api';
 
-/* ── Room / Appliance / Space modal (no checklist input) ── */
+/* ── Room / Appliance / Space modal ── */
 function RoomModal({ listingId, onClose, onSaved, room }) {
   const editing = !!room;
   const [name, setName]             = useState(room?.name || '');
@@ -203,45 +203,69 @@ function AddTaskModal({ listingId, room, onClose, onSaved }) {
   );
 }
 
-/* ── Add Contractor modal ── */
-function AddContractorModal({ listingId, onClose, onAdded }) {
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+/* ── Send Contractor Link modal ── */
+function SendLinkModal({ listingId, checkoutDate, onClose }) {
+  const [phone, setPhone]     = useState('');
+  const [error, setError]     = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent]       = useState(false);
 
-  const handleAdd = async () => {
-    if (!email.trim()) { setError('Email required'); return; }
-    setSaving(true); setError('');
+  const handleSend = async () => {
+    if (!phone.trim()) { setError('Phone number is required'); return; }
+    setSending(true); setError('');
     try {
-      await api.post(`/listings/${listingId}/cleaners`, { email });
-      onAdded();
+      await api.post('/jobs/send-link', { listingId, checkoutDate, phone: phone.trim() });
+      setSent(true);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to add contractor');
+      setError(err.response?.data?.message || 'Failed to send SMS');
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal" style={{ maxWidth: 420 }}>
         <div className="modal-header">
-          <h3>Add contractor</h3>
+          <h3>Send job to contractor</h3>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
-        {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
-        <p style={{ marginBottom: 14 }}>Enter the contractor's registered email address.</p>
-        <div className="form-group">
-          <label>Email</label>
-          <input className="input" type="email" placeholder="contractor@example.com" value={email}
-            onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleAdd} disabled={saving}>
-            {saving ? 'Adding…' : 'Add contractor'}
-          </button>
-        </div>
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>📲</div>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>SMS sent!</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
+              The contractor will receive a link to their task list.
+            </p>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+              Enter the contractor's phone number. They'll receive an SMS with a link
+              to view and check off all rooms for this checkout.
+            </p>
+            <div className="form-group">
+              <label>Phone number</label>
+              <input
+                className="input"
+                placeholder="e.g. 206 555 1234"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSend} disabled={sending}>
+                {sending ? 'Sending…' : '📲 Send SMS'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -278,19 +302,20 @@ const MAINT_SECTION = {
 /* ── Main component ── */
 export default function ListingDetail() {
   const { id } = useParams();
-  const [listing, setListing]               = useState(null);
-  const [allRooms, setAllRooms]             = useState([]);
-  const [jobs, setJobs]                     = useState([]);
-  const [maintRooms, setMaintRooms]         = useState([]);
-  const [loading, setLoading]               = useState(true);
-  const [roomModal, setRoomModal]           = useState(false);
-  const [editRoom, setEditRoom]             = useState(null);
-  const [contractorModal, setContractorModal] = useState(false);
-  const [taskModal, setTaskModal]           = useState(null);
+  const [listing, setListing]             = useState(null);
+  const [allRooms, setAllRooms]           = useState([]);
+  const [jobs, setJobs]                   = useState([]);
+  const [maintRooms, setMaintRooms]       = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [roomModal, setRoomModal]         = useState(false);
+  const [editRoom, setEditRoom]           = useState(null);
+  const [taskModal, setTaskModal]         = useState(null);
   const [checklistModal, setChecklistModal] = useState(null);
-  const [expanded, setExpanded]             = useState({});
-  const [completing, setCompleting]         = useState(null);
-  const [tab, setTab]                       = useState('spaces');
+  const [sendLinkModal, setSendLinkModal] = useState(null);
+  const [expanded, setExpanded]           = useState({});
+  const [expandedRooms, setExpandedRooms] = useState({});
+  const [togglingItem, setTogglingItem]   = useState(null);
+  const [tab, setTab]                     = useState('spaces');
 
   const load = async () => {
     setLoading(true);
@@ -343,30 +368,34 @@ export default function ListingDetail() {
     loadMaintenance();
   };
 
-  const handleRemoveContractor = async (cleanerId) => {
-    if (!window.confirm('Remove this contractor?')) return;
-    await api.delete(`/listings/${id}/cleaners/${cleanerId}`);
-    load();
-  };
-
-  const handleCompleteTask = async (taskId) => {
-    setCompleting(taskId);
-    try {
-      await api.patch(`/maintenance/${taskId}/complete`);
-      loadMaintenance();
-    } finally {
-      setCompleting(null);
-    }
-  };
-
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task?')) return;
     await api.delete(`/maintenance/${taskId}`);
     loadMaintenance();
   };
 
+  const handleToggleChecklistItem = async (jobId, itemId, currentCompleted) => {
+    setTogglingItem(itemId);
+    try {
+      const res = await api.patch(`/jobs/${jobId}/checklist/${itemId}`, {
+        completed: !currentCompleted,
+      });
+      const updatedJob = res.data;
+      setJobs((prev) =>
+        prev.map((j) => (j.id === jobId ? { ...updatedJob, checklist: updatedJob.checklist } : j))
+      );
+    } catch (err) {
+      console.error('Failed to toggle checklist item', err);
+    } finally {
+      setTogglingItem(null);
+    }
+  };
+
   const toggleExpand = (entityId) =>
     setExpanded((prev) => ({ ...prev, [entityId]: !prev[entityId] }));
+
+  const toggleRoom = (jobId) =>
+    setExpandedRooms((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
@@ -387,9 +416,8 @@ export default function ListingDetail() {
       {/* Tabs */}
       <div className="cluster" style={{ marginBottom: 24 }}>
         {[
-          { key: 'spaces',      label: `🏠 Spaces & Appliances (${allRooms.length})` },
-          { key: 'contractors', label: `👷 Contractors (${listing.cleaners?.length || 0})` },
-          { key: 'jobs',        label: `📋 Jobs (${jobs.length})` },
+          { key: 'spaces', label: `🏠 Spaces & Appliances (${allRooms.length})` },
+          { key: 'jobs',   label: `📋 Jobs (${new Set(jobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : 'unknown')).size + maintRooms.flatMap((r) => r.maintenanceTasks || []).length})` },
         ].map(({ key, label }) => (
           <button key={key} className={`btn ${tab === key ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setTab(key)}>
@@ -401,7 +429,7 @@ export default function ListingDetail() {
       {/* ── Spaces & Appliances tab ── */}
       {tab === 'spaces' && (
         <>
-          <div className="section-header">
+          <div className="section-header" style={{ gap: 16 }}>
             <h2>Spaces & Appliances</h2>
             <button className="btn btn-primary" onClick={() => { setEditRoom(null); setRoomModal(true); }}>
               + Add appliance / space
@@ -430,7 +458,6 @@ export default function ListingDetail() {
 
                       return (
                         <div key={entity.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                          {/* Entity header */}
                           <div
                             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                               padding: '12px 16px', cursor: 'pointer', userSelect: 'none' }}
@@ -450,11 +477,8 @@ export default function ListingDetail() {
                             </div>
                           </div>
 
-                          {/* Expanded body */}
                           {isOpen && (
                             <div style={{ borderTop: '1px solid var(--border)', padding: '16px' }}>
-
-                              {/* 🧹 Cleaning Tasks — ROOM only */}
                               {isRoom && (
                                 <div style={CLEANING_SECTION.wrapper}>
                                   <p style={CLEANING_SECTION.header}>🧹 Guest Turnover Tasks</p>
@@ -483,7 +507,6 @@ export default function ListingDetail() {
                                 </div>
                               )}
 
-                              {/* 🔧 Maintenance Tasks — all types */}
                               <div style={MAINT_SECTION.wrapper}>
                                 <p style={MAINT_SECTION.header}>🔧 Scheduled Maintenance</p>
                                 {tasks.length === 0 ? (
@@ -514,19 +537,10 @@ export default function ListingDetail() {
                                               {' · Next: '}<strong>{new Date(task.nextDueAt).toLocaleDateString()}</strong>
                                             </p>
                                           </div>
-                                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                                            {task.status !== 'COMPLETED' && (
-                                              <button className="btn btn-primary btn-sm"
-                                                disabled={completing === task.id}
-                                                onClick={() => handleCompleteTask(task.id)}>
-                                                {completing === task.id ? '…' : '✓'}
-                                              </button>
-                                            )}
-                                            <button className="btn btn-danger btn-sm"
-                                              onClick={() => handleDeleteTask(task.id)}>
-                                              🗑
-                                            </button>
-                                          </div>
+                                          <button className="btn btn-danger btn-sm"
+                                            onClick={() => handleDeleteTask(task.id)}>
+                                            🗑
+                                          </button>
                                         </div>
                                       </div>
                                     ))}
@@ -537,7 +551,6 @@ export default function ListingDetail() {
                                   + Add maintenance task
                                 </button>
                               </div>
-
                             </div>
                           )}
                         </div>
@@ -548,37 +561,6 @@ export default function ListingDetail() {
               </div>
             );
           })}
-        </>
-      )}
-
-      {/* ── Contractors tab ── */}
-      {tab === 'contractors' && (
-        <>
-          <div className="section-header">
-            <h2>Contractors</h2>
-            <button className="btn btn-primary" onClick={() => setContractorModal(true)}>+ Add contractor</button>
-          </div>
-          {(!listing.cleaners || listing.cleaners.length === 0) ? (
-            <div className="empty-state">
-              <div style={{ fontSize: 32 }}>👷</div>
-              <h3>No contractors yet</h3>
-              <p>Add contractors so they get notified for jobs</p>
-            </div>
-          ) : (
-            <div className="stack">
-              {listing.cleaners.map((c) => (
-                <div key={c.id} className="card" style={{ padding: '14px 18px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <strong>{c.name}</strong>
-                      <p style={{ fontSize: 13 }}>{c.email} {c.phone && `· ${c.phone}`}</p>
-                    </div>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveContractor(c.id)}>Remove</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
 
@@ -597,18 +579,44 @@ export default function ListingDetail() {
           }))
         );
 
-        const jobItems = jobs.map((j) => ({
-          _type: 'job',
-          id: j.id,
-          title: j.guestName,
-          date: j.checkoutDate,
-          status: j.status,
-          roomName: j.room?.name,
-          cleaner: j.cleaner,
-          jobRef: j,
-        }));
+        const jobsByDate = {};
+        const seenJobIds = new Set();
+        jobs.forEach((j) => {
+          if (seenJobIds.has(j.id)) return;
+          seenJobIds.add(j.id);
+          const key = j.checkoutDate
+            ? new Date(j.checkoutDate).toISOString().slice(0, 10)
+            : 'unknown';
+          if (!jobsByDate[key]) {
+            jobsByDate[key] = {
+              _type: 'cleaning_group',
+              date: j.checkoutDate,
+              guestName: j.guestName,
+              rooms: [],
+            };
+          }
+          const roomName = j.room?.name || 'Room';
+          const alreadyAdded = jobsByDate[key].rooms.some((r) => r.roomName === roomName);
+          if (!alreadyAdded) {
+            jobsByDate[key].rooms.push({
+              jobId: j.id,
+              roomName,
+              status: j.status,
+              cleaner: j.cleaner,
+              checklist: j.checklist || [],
+            });
+          }
+        });
 
-        const allItems = [...jobItems, ...maintItems].sort(
+        const cleaningGroups = Object.values(jobsByDate);
+
+        const groupStatus = (rooms) => {
+          if (rooms.every((r) => r.status === 'completed')) return 'completed';
+          if (rooms.some((r) => r.status === 'in_progress')) return 'in_progress';
+          return 'pending';
+        };
+
+        const allItems = [...cleaningGroups, ...maintItems].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
 
@@ -646,51 +654,158 @@ export default function ListingDetail() {
             ) : (
               <div className="stack">
                 {allItems.map((item) => {
-                  const isJob    = item._type === 'job';
-                  const isDone   = item.status === 'completed' || item.status === 'COMPLETED';
-                  const colorSet = isJob
-                    ? (isDone ? JOB_COLORS.done   : JOB_COLORS.active)
-                    : (isDone ? MAINT_COLORS.done  : MAINT_COLORS.active);
 
-                  const inner = (
-                    <div style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
-                      opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+                  if (item._type === 'cleaning_group') {
+                    const aggStatus = groupStatus(item.rooms);
+                    const isDone    = aggStatus === 'completed';
+                    const colorSet  = isDone ? JOB_COLORS.done : JOB_COLORS.active;
+
+                    return (
+                      <div key={`checkout-${item.date}`}
+                        style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
+                          opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between',
+                          alignItems: 'flex-start', marginBottom: 10 }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                              <span style={{ fontSize: 13, fontWeight: 700 }}>🧹 Checkout Clean</span>
+                              {item.guestName && (
+                                <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.guestName}</span>
+                              )}
+                            </div>
+                            <p style={{ fontSize: 12 }}>
+                              📅 {new Date(item.date).toLocaleDateString(undefined, {
+                                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                              })}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
+                              fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
+                              color: colorSet.color }}>
+                              {STATUS_LABEL[aggStatus]}
+                            </span>
+                            {!isDone && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setSendLinkModal({ checkoutDate: item.date })}
+                                style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                                📲 Assign
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {item.rooms.map((r) => {
+                            const roomDone   = r.status === 'completed';
+                            const isRoomOpen = !!expandedRooms[r.jobId];
+                            const checklist  = r.checklist;
+                            const doneCount  = checklist.filter((c) => c.completed).length;
+
+                            return (
+                              <div key={r.jobId}>
+                                <div
+                                  onClick={() => toggleRoom(r.jobId)}
+                                  style={{ display: 'flex', justifyContent: 'space-between',
+                                    alignItems: 'center', padding: '7px 10px', borderRadius: 7,
+                                    background: roomDone ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.6)',
+                                    border: '1px solid rgba(0,0,0,0.06)',
+                                    cursor: 'pointer', userSelect: 'none' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: colorSet.color,
+                                      opacity: roomDone ? 0.6 : 1 }}>
+                                      🛏 {r.roomName}
+                                    </span>
+                                    {checklist.length > 0 && (
+                                      <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.6 }}>
+                                        {doneCount}/{checklist.length} tasks done
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.8 }}>
+                                      {STATUS_LABEL[r.status]}
+                                    </span>
+                                    <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.4 }}>
+                                      {isRoomOpen ? '▲' : '▼'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {isRoomOpen && (
+                                  <div style={{ margin: '3px 0 3px 10px', padding: '8px 12px',
+                                    borderRadius: 7, background: 'rgba(255,255,255,0.5)',
+                                    border: '1px solid rgba(0,0,0,0.05)' }}>
+                                    {checklist.length === 0 ? (
+                                      <p style={{ fontSize: 12, color: colorSet.color, opacity: 0.6, margin: 0 }}>
+                                        No checklist items for this room.
+                                      </p>
+                                    ) : (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                        {checklist.map((ci) => (
+                                          <label key={ci.id}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 9,
+                                              cursor: togglingItem === ci.id ? 'wait' : 'pointer',
+                                              opacity: togglingItem === ci.id ? 0.5 : 1 }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={!!ci.completed}
+                                              disabled={togglingItem === ci.id}
+                                              onChange={() => handleToggleChecklistItem(r.jobId, ci.id, ci.completed)}
+                                              style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }}
+                                            />
+                                            <span style={{ fontSize: 12, color: colorSet.color,
+                                              textDecoration: ci.completed ? 'line-through' : 'none',
+                                              opacity: ci.completed ? 0.45 : 1 }}>
+                                              {ci.text}
+                                            </span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  /* ── Maintenance task card ── */
+                  const isDone   = item.status === 'COMPLETED';
+                  const colorSet = isDone ? MAINT_COLORS.done : MAINT_COLORS.active;
+
+                  return (
+                    <div key={`maint-${item.id}`}
+                      style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
+                        opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700 }}>
-                              {isJob ? '🧹' : '🔧'} {item.roomName}
-                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700 }}>🔧 {item.roomName}</span>
                             <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.title}</span>
                           </div>
                           <p style={{ fontSize: 12, marginBottom: 2 }}>
-                            📅 {new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                            📅 {new Date(item.date).toLocaleDateString(undefined, {
+                              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                            })}
                           </p>
-                          {isJob && item.cleaner && (
-                            <p style={{ fontSize: 12 }}>👤 {item.cleaner.name}</p>
+                          {item.notes && (
+                            <p style={{ fontSize: 12, marginBottom: 2 }}>{item.notes}</p>
                           )}
-                          {!isJob && item.notes && (
-                            <p style={{ fontSize: 12 }}>{item.notes}</p>
-                          )}
-                          {!isJob && (
-                            <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
-                          )}
+                          <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
                         </div>
                         <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, flexShrink: 0,
                           fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
                           color: colorSet.color }}>
-                          {isJob ? STATUS_LABEL[item.status] : TASK_STATUS_LABEL[item.status]}
+                          {TASK_STATUS_LABEL[item.status]}
                         </span>
                       </div>
                     </div>
-                  );
-
-                  return isJob ? (
-                    <Link key={`job-${item.id}`} to={`/jobs/${item.id}`} style={{ textDecoration: 'none' }}>
-                      {inner}
-                    </Link>
-                  ) : (
-                    <div key={`maint-${item.id}`}>{inner}</div>
                   );
                 })}
               </div>
@@ -704,10 +819,6 @@ export default function ListingDetail() {
         <RoomModal listingId={id} room={editRoom} onClose={() => setRoomModal(false)}
           onSaved={() => { setRoomModal(false); load(); loadMaintenance(); }} />
       )}
-      {contractorModal && (
-        <AddContractorModal listingId={id} onClose={() => setContractorModal(false)}
-          onAdded={() => { setContractorModal(false); load(); }} />
-      )}
       {taskModal && (
         <AddTaskModal listingId={id} room={taskModal} onClose={() => setTaskModal(null)}
           onSaved={() => { setTaskModal(null); loadMaintenance(); }} />
@@ -715,6 +826,13 @@ export default function ListingDetail() {
       {checklistModal && (
         <AddChecklistItemModal room={checklistModal} onClose={() => setChecklistModal(null)}
           onSaved={() => { setChecklistModal(null); loadMaintenance(); }} />
+      )}
+      {sendLinkModal && (
+        <SendLinkModal
+          listingId={id}
+          checkoutDate={sendLinkModal.checkoutDate}
+          onClose={() => setSendLinkModal(null)}
+        />
       )}
     </div>
   );

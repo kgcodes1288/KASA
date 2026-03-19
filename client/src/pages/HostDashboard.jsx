@@ -250,7 +250,7 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
           fontFamily: 'var(--font-body)',
         }}
       >
-        <span>📅 Booking calendar {listingJobs.length > 0 ? `· ${listingJobs.length} jobs synced` : '· no jobs yet'}</span>
+        <span>📅 Booking calendar {listingJobs.length > 0 ? `· ${new Set(listingJobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : j.id)).size} jobs synced` : '· no jobs yet'}</span>
         <span>{showCal ? '▲' : '▼'}</span>
       </button>
 
