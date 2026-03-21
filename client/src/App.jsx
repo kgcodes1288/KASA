@@ -10,6 +10,7 @@ import JobDetail from './pages/JobDetail';
 import AccountPage from './pages/AccountPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ContractorJob from './pages/ContractorJob';   // ← new
+import LegalPage from './pages/LegalPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="/accept-invite/:token" element={
             <Layout><AcceptInvitePage /></Layout>
           } />
+          <Route path="/privacy-terms" element={<LegalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

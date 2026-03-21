@@ -85,18 +85,17 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
     },
   });
 
-  // Always send WhatsApp — link goes to login, which redirects to account page
+  // Send SMS — link goes to login, which redirects to account page
   const link = `${process.env.CLIENT_URL}/login?redirect=/account`;
   const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
 
   await twilioClient.messages.create({
-    body: `Hi! ${req.user.name} has invited you to co-host "${listing.name}" on CleanStay as ${roleLabel}. Tap to join: ${link}`,
-    from: `whatsapp:${process.env.TWILIO_PHONE}`,
-    to: `whatsapp:${phone}`,
+    body: `Hi! ${req.user.name} has invited you to co-host "${listing.name}" on CleanStay as ${roleLabel}. Tap to join: ${link}. Reply STOP to opt out.`,
+    from: process.env.TWILIO_PHONE,
+    to: phone,
   });
 
-  res.status(201).json({ message: 'Invite sent via WhatsApp.', coHost });
-});
+  res.status(201).json({ message: 'Invite sent via SMS.', coHost });
 
 // GET /api/listings/:id/cohosts
 router.get('/:id/cohosts', authenticate2, async (req, res) => {
