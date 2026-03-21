@@ -10,6 +10,11 @@ router.get('/job/:token', async (req, res) => {
     });
 
     if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
+
+    if (jobToken.status === 'WITHDRAWN') {
+      return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    }
+
     if (new Date() > new Date(jobToken.expiresAt)) {
       return res.status(410).json({ message: 'This link has expired' });
     }
@@ -26,7 +31,7 @@ router.get('/job/:token', async (req, res) => {
         checkoutDate: { gte: checkoutStart, lte: checkoutEnd },
       },
       include: {
-        room:          { select: { id: true, name: true } },
+        room:           { select: { id: true, name: true } },
         checklistItems: { orderBy: { id: 'asc' } },
       },
       orderBy: { room: { name: 'asc' } },
@@ -49,11 +54,45 @@ router.get('/job/:token', async (req, res) => {
     }));
 
     res.json({
-      listing:      jobToken.listing,
-      checkoutDate: jobToken.checkoutDate,
-      expiresAt:    jobToken.expiresAt,
+      listing:        jobToken.listing,
+      checkoutDate:   jobToken.checkoutDate,
+      expiresAt:      jobToken.expiresAt,
+      tokenStatus:    jobToken.status,
+      contractorName: jobToken.contractorName,
       rooms,
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/public/job/:token/accept — contractor accepts the job
+router.post('/job/:token/accept', async (req, res) => {
+  try {
+    const jobToken = await prisma.jobToken.findUnique({
+      where: { token: req.params.token },
+    });
+
+    if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
+
+    if (jobToken.status === 'WITHDRAWN') {
+      return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    }
+
+    if (new Date() > new Date(jobToken.expiresAt)) {
+      return res.status(410).json({ message: 'This link has expired' });
+    }
+
+    if (jobToken.status === 'ACCEPTED') {
+      return res.json({ message: 'Already accepted' });
+    }
+
+    await prisma.jobToken.update({
+      where: { token: req.params.token },
+      data:  { status: 'ACCEPTED' },
+    });
+
+    res.json({ message: 'Job accepted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -67,6 +106,11 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
     });
 
     if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
+
+    if (jobToken.status === 'WITHDRAWN') {
+      return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    }
+
     if (new Date() > new Date(jobToken.expiresAt)) {
       return res.status(410).json({ message: 'This link has expired' });
     }
@@ -78,7 +122,6 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
       where: { id: req.params.itemId },
       include: { job: true },
     });
-
     if (!item) return res.status(404).json({ message: 'Item not found' });
     if (item.job.listingId !== jobToken.listingId) {
       return res.status(403).json({ message: 'Not authorised' });
@@ -87,14 +130,13 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
     // Toggle the item
     await prisma.jobChecklist.update({
       where: { id: req.params.itemId },
-      data: { completed, completedAt: completed ? new Date() : null },
+      data:  { completed, completedAt: completed ? new Date() : null },
     });
 
     // Recalculate job status
     const allItems = await prisma.jobChecklist.findMany({ where: { jobId: item.jobId } });
     const done     = allItems.filter((i) => i.completed).length;
     const status   = done === allItems.length ? 'completed' : done > 0 ? 'in_progress' : 'pending';
-
     await prisma.job.update({
       where: { id: item.jobId },
       data:  { status },

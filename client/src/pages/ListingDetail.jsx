@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api';
 
@@ -204,18 +204,28 @@ function AddTaskModal({ listingId, room, onClose, onSaved }) {
 }
 
 /* ── Send Contractor Link modal ── */
-function SendLinkModal({ listingId, checkoutDate, onClose }) {
-  const [phone, setPhone]     = useState('');
-  const [error, setError]     = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent, setSent]       = useState(false);
+function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }) {
+  const [contractorId, setContractorId] = useState('');
+  const [useManualPhone, setUseManualPhone] = useState(contractors.length === 0);
+  const [manualPhone, setManualPhone]   = useState('');
+  const [error, setError]               = useState('');
+  const [sending, setSending]           = useState(false);
+  const [sent, setSent]                 = useState(false);
 
   const handleSend = async () => {
-    if (!phone.trim()) { setError('Phone number is required'); return; }
+    if (!useManualPhone && !contractorId) { setError('Please select a contractor'); return; }
+    if (useManualPhone && !manualPhone.trim()) { setError('Phone number is required'); return; }
     setSending(true); setError('');
     try {
-      await api.post('/jobs/send-link', { listingId, checkoutDate, phone: phone.trim() });
+      const payload = { listingId, checkoutDate };
+      if (useManualPhone) {
+        payload.phone = manualPhone.trim();
+      } else {
+        payload.contractorId = contractorId;
+      }
+      await api.post('/jobs/send-link', payload);
       setSent(true);
+      onSent();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to send SMS');
     } finally {
@@ -223,11 +233,13 @@ function SendLinkModal({ listingId, checkoutDate, onClose }) {
     }
   };
 
+  const selectedContractor = contractors.find((c) => c.id === contractorId);
+
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
+      <div className="modal" style={{ maxWidth: 440 }}>
         <div className="modal-header">
-          <h3>Send job to contractor</h3>
+          <h3>Assign job to contractor</h3>
           <button className="btn-icon" onClick={onClose}>✕</button>
         </div>
         {sent ? (
@@ -235,29 +247,69 @@ function SendLinkModal({ listingId, checkoutDate, onClose }) {
             <div style={{ fontSize: 36, marginBottom: 10 }}>📲</div>
             <p style={{ fontWeight: 600, marginBottom: 6 }}>SMS sent!</p>
             <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
-              The contractor will receive a link to their task list.
+              {selectedContractor
+                ? `${selectedContractor.name} will receive a link to their task list.`
+                : 'The contractor will receive a link to their task list.'}
             </p>
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>
-              Done
-            </button>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>Done</button>
           </div>
         ) : (
           <>
             {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
-            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Enter the contractor's phone number. They'll receive an SMS with a link
-              to view and check off all rooms for this checkout.
+
+            {/* Contractor dropdown */}
+            {!useManualPhone && contractors.length > 0 && (
+              <div className="form-group">
+                <label>Select contractor</label>
+                <select
+                  className="input"
+                  value={contractorId}
+                  onChange={(e) => setContractorId(e.target.value)}
+                >
+                  <option value="">Choose a contractor…</option>
+                  {contractors.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.trade ? ` — ${c.trade}` : ''} · {c.phone}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  style={{ background: 'none', border: 'none', fontSize: 12,
+                    color: 'var(--primary)', cursor: 'pointer', marginTop: 8, padding: 0 }}
+                  onClick={() => { setUseManualPhone(true); setContractorId(''); }}
+                >
+                  + Use a different number instead
+                </button>
+              </div>
+            )}
+
+            {/* Manual phone input */}
+            {useManualPhone && (
+              <div className="form-group">
+                <label>Phone number</label>
+                <input
+                  className="input"
+                  placeholder="e.g. 206 555 1234"
+                  value={manualPhone}
+                  onChange={(e) => setManualPhone(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
+                />
+                {contractors.length > 0 && (
+                  <button
+                    style={{ background: 'none', border: 'none', fontSize: 12,
+                      color: 'var(--primary)', cursor: 'pointer', marginTop: 8, padding: 0 }}
+                    onClick={() => { setUseManualPhone(false); setManualPhone(''); }}
+                  >
+                    ← Pick from saved contractors
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 16 }}>
+              They'll receive an SMS with a link to view and check off all rooms for this checkout.
             </p>
-            <div className="form-group">
-              <label>Phone number</label>
-              <input
-                className="input"
-                placeholder="e.g. 206 555 1234"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
-              />
-            </div>
+
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSend} disabled={sending}>
@@ -299,6 +351,15 @@ const MAINT_SECTION = {
   item:    { padding: '10px 12px', background: '#fef3c7', borderRadius: 8, border: '1px solid #fde68a' },
 };
 
+const TOKEN_STATUS_STYLE = {
+  PENDING:  { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' },
+  ACCEPTED: { background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' },
+};
+const TOKEN_STATUS_LABEL = {
+  PENDING:  '📲 Awaiting Acceptance',
+  ACCEPTED: '✅ Accepted',
+};
+
 /* ── Main component ── */
 export default function ListingDetail() {
   const { id } = useParams();
@@ -306,12 +367,15 @@ export default function ListingDetail() {
   const [allRooms, setAllRooms]           = useState([]);
   const [jobs, setJobs]                   = useState([]);
   const [maintRooms, setMaintRooms]       = useState([]);
+  const [contractors, setContractors]     = useState([]);
+  const [tokenStatuses, setTokenStatuses] = useState({});  // dateKey → jobToken
   const [loading, setLoading]             = useState(true);
   const [roomModal, setRoomModal]         = useState(false);
   const [editRoom, setEditRoom]           = useState(null);
   const [taskModal, setTaskModal]         = useState(null);
   const [checklistModal, setChecklistModal] = useState(null);
   const [sendLinkModal, setSendLinkModal] = useState(null);
+  const [withdrawing, setWithdrawing]     = useState(null);
   const [expanded, setExpanded]           = useState({});
   const [expandedRooms, setExpandedRooms] = useState({});
   const [togglingItem, setTogglingItem]   = useState(null);
@@ -320,14 +384,16 @@ export default function ListingDetail() {
   const load = async () => {
     setLoading(true);
     try {
-      const [lRes, rRes, jRes] = await Promise.all([
+      const [lRes, rRes, jRes, cRes] = await Promise.all([
         api.get(`/listings/${id}`),
         api.get(`/rooms/listing/${id}`),
         api.get(`/jobs`),
+        api.get(`/contractors`),
       ]);
       setListing(lRes.data);
       setAllRooms(rRes.data);
       setJobs(jRes.data.filter((j) => j.listing?.id === id || j.listing === id));
+      setContractors(cRes.data);
     } finally {
       setLoading(false);
     }
@@ -342,11 +408,36 @@ export default function ListingDetail() {
     }
   };
 
+  // Fetch token status for every unique checkout date
+  const loadTokenStatuses = useCallback(async (jobList) => {
+    const dateKeys = [...new Set(
+      jobList
+        .filter((j) => j.checkoutDate)
+        .map((j) => new Date(j.checkoutDate).toISOString().slice(0, 10))
+    )];
+    if (dateKeys.length === 0) return;
+    const results = await Promise.all(
+      dateKeys.map((dk) =>
+        api.get(`/jobs/token-status/${id}/${dk}`)
+          .then((r) => ({ dk, token: r.data }))
+          .catch(() => ({ dk, token: null }))
+      )
+    );
+    const map = {};
+    results.forEach(({ dk, token }) => { map[dk] = token; });
+    setTokenStatuses(map);
+  }, [id]);
+
   useEffect(() => { load(); }, [id]);
 
   useEffect(() => {
     if (tab === 'spaces' || tab === 'jobs') loadMaintenance();
   }, [tab]);
+
+  // Re-load token statuses whenever jobs change
+  useEffect(() => {
+    if (jobs.length > 0) loadTokenStatuses(jobs);
+  }, [jobs, loadTokenStatuses]);
 
   const handleDeleteRoom = async (roomId) => {
     if (!window.confirm('Delete this?')) return;
@@ -388,6 +479,19 @@ export default function ListingDetail() {
       console.error('Failed to toggle checklist item', err);
     } finally {
       setTogglingItem(null);
+    }
+  };
+
+  const handleWithdraw = async (token, dateKey) => {
+    if (!window.confirm('Withdraw this assignment? The contractor\'s link will stop working.')) return;
+    setWithdrawing(dateKey);
+    try {
+      await api.post(`/jobs/withdraw/${token}`);
+      setTokenStatuses((prev) => ({ ...prev, [dateKey]: null }));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to withdraw');
+    } finally {
+      setWithdrawing(null);
     }
   };
 
@@ -591,6 +695,7 @@ export default function ListingDetail() {
             jobsByDate[key] = {
               _type: 'cleaning_group',
               date: j.checkoutDate,
+              dateKey: key,
               guestName: j.guestName,
               rooms: [],
             };
@@ -602,7 +707,6 @@ export default function ListingDetail() {
               jobId: j.id,
               roomName,
               status: j.status,
-              cleaner: j.cleaner,
               checklist: j.checklist || [],
             });
           }
@@ -656,9 +760,12 @@ export default function ListingDetail() {
                 {allItems.map((item) => {
 
                   if (item._type === 'cleaning_group') {
-                    const aggStatus = groupStatus(item.rooms);
-                    const isDone    = aggStatus === 'completed';
-                    const colorSet  = isDone ? JOB_COLORS.done : JOB_COLORS.active;
+                    const aggStatus  = groupStatus(item.rooms);
+                    const isDone     = aggStatus === 'completed';
+                    const colorSet   = isDone ? JOB_COLORS.done : JOB_COLORS.active;
+                    const dateKey    = item.dateKey;
+                    const activeToken = tokenStatuses[dateKey];
+                    const isWithdrawing = withdrawing === dateKey;
 
                     return (
                       <div key={`checkout-${item.date}`}
@@ -680,13 +787,42 @@ export default function ListingDetail() {
                               })}
                             </p>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+
+                          {/* Right side: status badge + assign/withdraw controls */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            {/* Job status badge */}
                             <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
                               fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
                               color: colorSet.color }}>
                               {STATUS_LABEL[aggStatus]}
                             </span>
-                            {!isDone && (
+
+                            {/* Assignment status badge */}
+                            {/* Assignment status badge */}
+                            {activeToken && !isDone && (
+                              <span style={{
+                                fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
+                                ...TOKEN_STATUS_STYLE[activeToken.status],
+                              }}>
+                                {TOKEN_STATUS_LABEL[activeToken.status]}
+                                {activeToken.contractorName ? ` · ${activeToken.contractorName}` : ''}
+                              </span>
+                            )}
+
+                            {/* Withdraw button */}
+                            {activeToken && !isDone && (
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => handleWithdraw(activeToken.token, dateKey)}
+                                disabled={isWithdrawing}
+                                style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                              >
+                                {isWithdrawing ? 'Withdrawing…' : 'Withdraw'}
+                              </button>
+                            )}
+
+                            {/* Assign button — hidden if already assigned or done */}
+                            {!activeToken && !isDone && (
                               <button
                                 className="btn btn-secondary btn-sm"
                                 onClick={() => setSendLinkModal({ checkoutDate: item.date })}
@@ -831,7 +967,9 @@ export default function ListingDetail() {
         <SendLinkModal
           listingId={id}
           checkoutDate={sendLinkModal.checkoutDate}
+          contractors={contractors}
           onClose={() => setSendLinkModal(null)}
+          onSent={() => loadTokenStatuses(jobs)}
         />
       )}
     </div>

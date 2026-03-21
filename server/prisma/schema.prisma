@@ -17,10 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  listings  Listing[]       @relation("HostListings")
-  jobs      Job[]
-  coHosting ListingCoHost[] @relation("CoHostUser")
+  listings         Listing[]       @relation("HostListings")
+  jobs             Job[]
+  coHosting        ListingCoHost[] @relation("CoHostUser")
   maintenanceTasks MaintenanceTask[]
+  contractors      Contractor[]
 }
 
 enum Role {
@@ -38,12 +39,12 @@ model Listing {
   updatedAt   DateTime  @updatedAt
   hostId      String
 
-  host      User            @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
-  rooms     Room[]
-  jobs      Job[]
-  coHosts   ListingCoHost[] @relation("CoHostListing")
+  host             User            @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+  rooms            Room[]
+  jobs             Job[]
+  coHosts          ListingCoHost[] @relation("CoHostListing")
   maintenanceTasks MaintenanceTask[]
-  jobTokens JobToken[]
+  jobTokens        JobToken[]
 }
 
 model ListingCoHost {
@@ -162,13 +163,34 @@ model JobChecklist {
 }
 
 model JobToken {
-  id           String   @id @default(cuid())
-  token        String   @unique
-  phone        String
-  checkoutDate DateTime
-  expiresAt    DateTime
-  createdAt    DateTime @default(now())
-  listingId    String
+  id             String         @id @default(cuid())
+  token          String         @unique
+  phone          String
+  contractorName String?
+  status         JobTokenStatus @default(PENDING)
+  checkoutDate   DateTime
+  expiresAt      DateTime
+  createdAt      DateTime       @default(now())
+  listingId      String
 
-  listing      Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing        Listing        @relation(fields: [listingId], references: [id], onDelete: Cascade)
+}
+
+enum JobTokenStatus {
+  PENDING
+  ACCEPTED
+  WITHDRAWN
+}
+
+model Contractor {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  trade     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hostId    String
+
+  host      User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
 }

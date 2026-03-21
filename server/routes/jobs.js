@@ -20,6 +20,11 @@ const jobInclude = {
 
 const fmt = (j) => ({ ...j, checklist: j.checklistItems });
 
+const normalizePhone = (phone) => {
+  const digits = phone.replace(/\D/g, '');
+  return digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
+};
+
 // GET /api/jobs
 router.get('/', auth, async (req, res) => {
   try {
@@ -104,13 +109,16 @@ router.patch('/:id/assign', auth, async (req, res) => {
 router.post('/send-link', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
 
-  const { listingId, checkoutDate, phone } = req.body;
-  if (!listingId || !checkoutDate || !phone) {
-    return res.status(400).json({ message: 'listingId, checkoutDate and phone are required' });
+  const { listingId, checkoutDate, phone, contractorId } = req.body;
+  if (!listingId || !checkoutDate) {
+    return res.status(400).json({ message: 'listingId and checkoutDate are required' });
+  }
+  if (!phone && !contractorId) {
+    return res.status(400).json({ message: 'phone or contractorId is required' });
   }
 
   try {
-    // Verify listing belongs to this host (or they are an accepted co-host)
+    // Verify listing belongs to this host or they are an accepted co-host
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
 
@@ -120,12 +128,42 @@ router.post('/send-link', auth, async (req, res) => {
     });
     if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
 
-    // Verify there are jobs for this checkout date
+    // Resolve phone + name from contractorId or raw phone
+    let resolvedPhone;
+    let resolvedName = null;
+
+    if (contractorId) {
+      const contractor = await prisma.contractor.findFirst({
+        where: { id: contractorId, hostId: req.user.id },
+      });
+      if (!contractor) return res.status(404).json({ message: 'Contractor not found' });
+      resolvedPhone = contractor.phone;
+      resolvedName  = contractor.name;
+    } else {
+      resolvedPhone = normalizePhone(phone);
+    }
+
+    // Check checkout date range
     const checkoutStart = new Date(checkoutDate);
     checkoutStart.setHours(0, 0, 0, 0);
     const checkoutEnd = new Date(checkoutDate);
     checkoutEnd.setHours(23, 59, 59, 999);
 
+    // Block if an active (PENDING or ACCEPTED) token already exists for this listing + date
+    const existing = await prisma.jobToken.findFirst({
+      where: {
+        listingId,
+        checkoutDate: { gte: checkoutStart, lte: checkoutEnd },
+        status: { in: ['PENDING', 'ACCEPTED'] },
+      },
+    });
+    if (existing) {
+      return res.status(409).json({
+        message: 'This job is already assigned. Withdraw the current assignment before reassigning.',
+      });
+    }
+
+    // Verify there are jobs for this checkout date
     const jobs = await prisma.job.findMany({
       where: {
         listingId,
@@ -141,12 +179,16 @@ router.post('/send-link', auth, async (req, res) => {
     const expiresAt = new Date(checkoutDate);
     expiresAt.setHours(23, 59, 59, 999);
 
-    // Normalise phone
-    const normalised = phone.replace(/\D/g, '');
-    const e164 = normalised.startsWith('1') ? `+${normalised}` : `+1${normalised}`;
-
     await prisma.jobToken.create({
-      data: { token, phone: e164, listingId, checkoutDate: checkoutStart, expiresAt },
+      data: {
+        token,
+        phone:          resolvedPhone,
+        contractorName: resolvedName,
+        status:         'PENDING',
+        listingId,
+        checkoutDate:   checkoutStart,
+        expiresAt,
+      },
     });
 
     const clientUrl = process.env.CLIENT_URL || 'https://cleanstay.onrender.com';
@@ -155,12 +197,69 @@ router.post('/send-link', auth, async (req, res) => {
     console.log(`[JobToken] Contractor link: ${link}`);
 
     await twilioClient.messages.create({
-      to:   e164,
+      to:   resolvedPhone,
       from: process.env.TWILIO_PHONE,
       body: `Hi! You have a cleaning job at ${listing.name} on ${new Date(checkoutDate).toLocaleDateString()}. Open your task list here: ${link}`,
     });
 
     res.json({ message: 'SMS sent successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/jobs/withdraw/:token — host withdraws an active assignment
+router.post('/withdraw/:token', auth, async (req, res) => {
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
+
+  try {
+    const jobToken = await prisma.jobToken.findUnique({
+      where: { token: req.params.token },
+      include: { listing: true },
+    });
+
+    if (!jobToken) return res.status(404).json({ message: 'Assignment not found' });
+
+    // Verify this host owns the listing
+    const isOwner = jobToken.listing.hostId === req.user.id;
+    const isCoHost = await prisma.listingCoHost.findFirst({
+      where: { listingId: jobToken.listingId, userId: req.user.id, status: 'ACCEPTED' },
+    });
+    if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
+
+    if (jobToken.status === 'WITHDRAWN') {
+      return res.status(400).json({ message: 'Already withdrawn' });
+    }
+
+    await prisma.jobToken.update({
+      where: { token: req.params.token },
+      data: { status: 'WITHDRAWN' },
+    });
+
+    res.json({ message: 'Assignment withdrawn' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/jobs/token-status/:listingId/:checkoutDate — get active token for a checkout
+router.get('/token-status/:listingId/:checkoutDate', auth, async (req, res) => {
+  try {
+    const checkoutStart = new Date(req.params.checkoutDate);
+    checkoutStart.setHours(0, 0, 0, 0);
+    const checkoutEnd = new Date(req.params.checkoutDate);
+    checkoutEnd.setHours(23, 59, 59, 999);
+
+    const jobToken = await prisma.jobToken.findFirst({
+      where: {
+        listingId: req.params.listingId,
+        checkoutDate: { gte: checkoutStart, lte: checkoutEnd },
+        status: { in: ['PENDING', 'ACCEPTED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(jobToken || null);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

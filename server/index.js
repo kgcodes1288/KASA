@@ -23,6 +23,7 @@ app.use('/api/jobs',        require('./routes/jobs'));
 app.use('/api/users',       require('./routes/users'));
 app.use('/api/cohosts',     require('./routes/cohosts'));
 app.use('/api/maintenance', taskRouter);
+app.use('/api/contractors', require('./routes/contractor'));
 app.use('/api/public',      require('./routes/public'));   // ← new
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));

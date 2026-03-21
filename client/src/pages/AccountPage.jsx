@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import './AccountPage.css';
 
-
 // ── Pending Invites Notification ─────────────────────────────────────────────
 function PendingInvites() {
   const [invites, setInvites] = useState([]);
@@ -83,23 +82,203 @@ function PendingInvites() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 12 }}>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => handleAccept(inv.id)}
-              >
-                Accept
-              </button>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleDecline(inv.id)}
-              >
-                Decline
-              </button>
+              <button className="btn btn-primary btn-sm" onClick={() => handleAccept(inv.id)}>Accept</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleDecline(inv.id)}>Decline</button>
             </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+// ── Contractors Section ───────────────────────────────────────────────────────
+function ContractorsSection() {
+  const [contractors, setContractors] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [showForm, setShowForm]       = useState(false);
+  const [editingId, setEditingId]     = useState(null);
+  const [formError, setFormError]     = useState('');
+  const [saving, setSaving]           = useState(false);
+
+  const emptyForm = { name: '', phone: '', trade: '', notes: '' };
+  const [form, setForm] = useState(emptyForm);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get('/contractors');
+      setContractors(data);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const openEdit = (c) => {
+    setEditingId(c.id);
+    setForm({ name: c.name, phone: c.phone, trade: c.trade || '', notes: c.notes || '' });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(emptyForm);
+    setFormError('');
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { setFormError('Name is required'); return; }
+    if (!form.phone.trim()) { setFormError('Phone is required'); return; }
+    setSaving(true);
+    setFormError('');
+    try {
+      if (editingId) {
+        await api.put(`/contractors/${editingId}`, form);
+      } else {
+        await api.post('/contractors', form);
+      }
+      closeForm();
+      load();
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Failed to save contractor');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this contractor?')) return;
+    try {
+      await api.delete(`/contractors/${id}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to delete contractor');
+    }
+  };
+
+  const TRADES = [
+    'General Cleaning',
+    'Plumber',
+    'Electrician',
+    'HVAC',
+    'Landscaping',
+    'Painter',
+    'Handyman',
+    'Pool Service',
+    'Pest Control',
+    'Other',
+  ];
+
+  if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" /></div>;
+
+  return (
+    <section className="account-section">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>Contractors</h2>
+        <button className="btn btn-primary btn-sm" onClick={openAdd}>+ Add Contractor</button>
+      </div>
+
+      {/* ── Add / Edit Form ── */}
+      {showForm && (
+        <div style={styles.formCard}>
+          <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>
+            {editingId ? 'Edit Contractor' : 'New Contractor'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={styles.label}>Name *</label>
+                <input
+                  className="input"
+                  placeholder="Jane Smith"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+              </div>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={styles.label}>Phone *</label>
+                <input
+                  className="input"
+                  placeholder="+1 555 000 0000"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={styles.label}>Trade / Specialty</label>
+                <select
+                  className="input"
+                  value={form.trade}
+                  onChange={(e) => setForm({ ...form, trade: e.target.value })}
+                >
+                  <option value="">Select trade…</option>
+                  {TRADES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={styles.label}>Notes</label>
+                <input
+                  className="input"
+                  placeholder="e.g. available weekends"
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          {formError && <p className="form-msg error" style={{ marginTop: 10 }}>{formError}</p>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Add Contractor'}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={closeForm} disabled={saving}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Contractor List ── */}
+      {contractors.length === 0 && !showForm ? (
+        <p style={styles.emptyText}>No contractors yet. Add one to use them when assigning jobs.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: showForm ? 16 : 0 }}>
+          {contractors.map((c) => (
+            <div key={c.id} style={styles.contractorRow}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
+                  {c.trade && (
+                    <span style={styles.tradeBadge}>{c.trade}</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 3 }}>
+                  📞 {c.phone}
+                  {c.notes && <span style={{ marginLeft: 12, color: 'var(--ink-ghost)' }}>· {c.notes}</span>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => openEdit(c)}>Edit</button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(c.id)}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -156,9 +335,6 @@ function CoHostSection() {
         phone: form.phone,
         role: form.role,
       });
-      // if (!data.smsSent && data.inviteUrl) {
-      //   setInviteLinks((prev) => ({ ...prev, [listingId]: data.inviteUrl }));
-      // }
       setField(listingId, 'msg', { type: 'success', text: data.message });
       setField(listingId, 'phone', '');
       setField(listingId, 'role', '');
@@ -180,14 +356,14 @@ function CoHostSection() {
   };
 
   const handleWithdraw = async (listingId, coHostId) => {
-  if (!window.confirm('Withdraw this invite?')) return;
-  try {
-    await api.delete(`/listings/${listingId}/cohosts/invite/${coHostId}`);
-    load();
-  } catch (err) {
-    alert(err.response?.data?.error || 'Failed to withdraw invite');
-  }
-};
+    if (!window.confirm('Withdraw this invite?')) return;
+    try {
+      await api.delete(`/listings/${listingId}/cohosts/invite/${coHostId}`);
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to withdraw invite');
+    }
+  };
 
   const handleLeave = async (listingId) => {
     if (!window.confirm('Leave this listing?')) return;
@@ -224,37 +400,37 @@ function CoHostSection() {
                         <p style={styles.emptyText}>No co-hosts yet.</p>
                       ) : (
                         <div style={{ marginBottom: 16 }}>
-                        {l.coHosts.map((ch) => (
-                          <div key={ch.id} style={styles.coHostRow}>
-                            <div>
-                              <span style={{ fontSize: 14, fontWeight: 500 }}>
-                                {ch.user?.name || ch.invitePhone}
-                              </span>
-                              <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
-                              <span style={styles.roleBadge(ch.role)}>
-                                {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
-                              </span>
+                          {l.coHosts.map((ch) => (
+                            <div key={ch.id} style={styles.coHostRow}>
+                              <div>
+                                <span style={{ fontSize: 14, fontWeight: 500 }}>
+                                  {ch.user?.name || ch.invitePhone}
+                                </span>
+                                <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
+                                <span style={styles.roleBadge(ch.role)}>
+                                  {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {ch.status === 'PENDING' && (
+                                  <button
+                                    className="btn btn-secondary btn-sm"
+                                    onClick={() => handleWithdraw(l.id, ch.id)}
+                                  >
+                                    Withdraw
+                                  </button>
+                                )}
+                                {ch.status === 'ACCEPTED' && ch.userId && (
+                                  <button
+                                    className="btn btn-danger btn-sm"
+                                    onClick={() => handleRemove(l.id, ch.userId)}
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              {ch.status === 'PENDING' && (
-                                <button
-                                  className="btn btn-secondary btn-sm"
-                                  onClick={() => handleWithdraw(l.id, ch.id)}
-                                >
-                                  Withdraw
-                                </button>
-                              )}
-                              {ch.status === 'ACCEPTED' && ch.userId && (
-                                <button
-                                  className="btn btn-danger btn-sm"
-                                  onClick={() => handleRemove(l.id, ch.userId)}
-                                >
-                                  Remove
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                          ))}
                         </div>
                       )}
                       <div style={styles.inviteForm}>
@@ -338,9 +514,7 @@ function CoHostSection() {
                     {l.coHostRole === 'COHOST' ? 'Co-host' : 'View Only'}
                   </span>
                 </div>
-                <button className="btn btn-danger btn-sm" onClick={() => handleLeave(l.id)}>
-                  Leave
-                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleLeave(l.id)}>Leave</button>
               </div>
             ))}
           </div>
@@ -468,6 +642,29 @@ const styles = {
     borderRadius: 10,
     backgroundColor: 'var(--bg)',
   },
+  contractorRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    backgroundColor: 'var(--bg)',
+  },
+  formCard: {
+    backgroundColor: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: '16px',
+    marginBottom: 4,
+  },
+  label: {
+    display: 'block',
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--ink-soft)',
+    marginBottom: 5,
+  },
   inviteForm: {
     backgroundColor: 'var(--bg)',
     borderRadius: 8,
@@ -485,6 +682,15 @@ const styles = {
     fontSize: 13,
     color: 'var(--ink-ghost)',
     marginBottom: 12,
+  },
+  tradeBadge: {
+    fontSize: 10,
+    fontWeight: 600,
+    padding: '2px 7px',
+    borderRadius: 20,
+    backgroundColor: '#e0f2fe',
+    color: '#0369a1',
+    border: '1px solid #bae6fd',
   },
   statusBadge: (status) => ({
     fontSize: 10,
@@ -507,9 +713,15 @@ const styles = {
   }),
 };
 
+// ── Tab definitions ──────────────────────────────────────────────────────────
+const ALL_TABS    = ['Profile', 'Security', 'Co-hosts', 'Contractors'];
+const CLEANER_TABS = ['Profile', 'Security'];
+
 // ── Main Account Page ────────────────────────────────────────────────────────
 export default function AccountPage() {
   const { user, updateUser } = useAuth();
+  const tabs = user?.role === 'host' ? ALL_TABS : CLEANER_TABS;
+  const [activeTab, setActiveTab] = useState('Profile');
 
   const [profile, setProfile] = useState({
     name:  user?.name  || '',
@@ -584,92 +796,130 @@ export default function AccountPage() {
           </div>
         </div>
 
-        {/* ── Profile Section ── */}
-        <section className="account-section">
-          <h2>Profile Details</h2>
-          <form onSubmit={handleProfileSubmit} className="account-form">
-            <div className="form-group">
-              <label htmlFor="name">Full Name</label>
-              <input
-                id="name" type="text" value={profile.name}
-                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <input
-                id="email" type="email" value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="phone">Phone Number</label>
-              <input
-                id="phone" type="tel" value={profile.phone || ''}
-                onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                placeholder="+1 555 000 0000"
-              />
-            </div>
-            {profileMsg && (
-              <p className={`form-msg ${profileMsg.type}`}>{profileMsg.text}</p>
-            )}
-            <button type="submit" className="btn-primary" disabled={profileLoading}>
-              {profileLoading ? 'Saving…' : 'Save Changes'}
+        {/* ── Tab Bar ── */}
+        <div style={{
+          display: 'flex',
+          gap: 4,
+          borderBottom: '2px solid var(--border)',
+          marginBottom: 24,
+          overflowX: 'auto',
+        }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                padding: '10px 18px',
+                fontSize: 14,
+                fontWeight: activeTab === tab ? 700 : 500,
+                color: activeTab === tab ? 'var(--primary)' : 'var(--ink-soft)',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
+                marginBottom: -2,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'color 0.15s',
+              }}
+            >
+              {tab}
             </button>
-          </form>
-        </section>
+          ))}
+        </div>
 
-        {/* ── Password Section ── */}
-        <section className="account-section">
-          <h2>Change Password</h2>
-          <form onSubmit={handlePasswordSubmit} className="account-form">
-            <div className="form-group">
-              <label htmlFor="currentPassword">Current Password</label>
-              <input
-                id="currentPassword" type="password" value={passwords.currentPassword}
-                onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="newPassword">New Password</label>
-              <input
-                id="newPassword" type="password" value={passwords.newPassword}
-                onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
-                minLength={6} required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="confirmPassword">Confirm New Password</label>
-              <input
-                id="confirmPassword" type="password" value={passwords.confirmPassword}
-                onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
-                style={{
-                  borderColor: passwordMismatch ? '#ef4444' : '',
-                  boxShadow: passwordMismatch ? '0 0 0 3px rgba(239,68,68,0.15)' : '',
-                }}
-                required
-              />
-              {passwordMismatch && (
-                <p className="field-error">Passwords do not match</p>
+        {/* ── Profile Tab ── */}
+        {activeTab === 'Profile' && (
+          <section className="account-section">
+            <h2>Profile Details</h2>
+            <form onSubmit={handleProfileSubmit} className="account-form">
+              <div className="form-group">
+                <label htmlFor="name">Full Name</label>
+                <input
+                  id="name" type="text" value={profile.name}
+                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="email">Email Address</label>
+                <input
+                  id="email" type="email" value={profile.email}
+                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="phone">Phone Number</label>
+                <input
+                  id="phone" type="tel" value={profile.phone || ''}
+                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  placeholder="+1 555 000 0000"
+                />
+              </div>
+              {profileMsg && (
+                <p className={`form-msg ${profileMsg.type}`}>{profileMsg.text}</p>
               )}
-            </div>
-            {pwMsg && (
-              <p className={`form-msg ${pwMsg.type}`}>{pwMsg.text}</p>
-            )}
-            <button type="submit" className="btn-primary" disabled={pwLoading || passwordMismatch}>
-              {pwLoading ? 'Updating…' : 'Update Password'}
-            </button>
-          </form>
-        </section>
+              <button type="submit" className="btn-primary" disabled={profileLoading}>
+                {profileLoading ? 'Saving…' : 'Save Changes'}
+              </button>
+            </form>
+          </section>
+        )}
 
-        {/* ── Co-host Access Section (hosts only) ── */}
-        {user?.role === 'host' && <CoHostSection />}
+        {/* ── Security Tab ── */}
+        {activeTab === 'Security' && (
+          <>
+            <section className="account-section">
+              <h2>Change Password</h2>
+              <form onSubmit={handlePasswordSubmit} className="account-form">
+                <div className="form-group">
+                  <label htmlFor="currentPassword">Current Password</label>
+                  <input
+                    id="currentPassword" type="password" value={passwords.currentPassword}
+                    onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="newPassword">New Password</label>
+                  <input
+                    id="newPassword" type="password" value={passwords.newPassword}
+                    onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                    minLength={6} required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="confirmPassword">Confirm New Password</label>
+                  <input
+                    id="confirmPassword" type="password" value={passwords.confirmPassword}
+                    onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+                    style={{
+                      borderColor: passwordMismatch ? '#ef4444' : '',
+                      boxShadow: passwordMismatch ? '0 0 0 3px rgba(239,68,68,0.15)' : '',
+                    }}
+                    required
+                  />
+                  {passwordMismatch && (
+                    <p className="field-error">Passwords do not match</p>
+                  )}
+                </div>
+                {pwMsg && (
+                  <p className={`form-msg ${pwMsg.type}`}>{pwMsg.text}</p>
+                )}
+                <button type="submit" className="btn-primary" disabled={pwLoading || passwordMismatch}>
+                  {pwLoading ? 'Updating…' : 'Update Password'}
+                </button>
+              </form>
+            </section>
+            <DeleteAccountSection />
+          </>
+        )}
 
-        {/* ── Delete Account ── */}
-        <DeleteAccountSection />
+        {/* ── Co-hosts Tab (hosts only) ── */}
+        {activeTab === 'Co-hosts' && <CoHostSection />}
+
+        {/* ── Contractors Tab (hosts only) ── */}
+        {activeTab === 'Contractors' && <ContractorsSection />}
 
       </div>
     </div>
