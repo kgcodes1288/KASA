@@ -95,7 +95,9 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
     to: phone,
   });
 
-  res.status(201).json({ message: 'Invite sent via SMS.', coHost });
+    res.status(201).json({ message: 'Invite sent via SMS.', coHost });
+});
+
 
 // GET /api/listings/:id/cohosts
 router.get('/:id/cohosts', authenticate2, async (req, res) => {
