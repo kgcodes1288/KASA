@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import HowToUseSection from '../components/HowToUseSection';
 import api from '../api';
 import './AccountPage.css';
 
@@ -915,11 +916,23 @@ export default function AccountPage() {
           </>
         )}
 
+
+
         {/* ── Co-hosts Tab (hosts only) ── */}
         {activeTab === 'Co-hosts' && <CoHostSection />}
 
         {/* ── Contractors Tab (hosts only) ── */}
         {activeTab === 'Contractors' && <ContractorsSection />}
+
+                  {/* ── How To Use ── */}
+          <HowToUseSection />
+
+          {/* ── Legal Footer ── */}
+        <footer className="account-legal-footer">
+          <a href="/privacy-terms#privacy-policy" className="account-legal-link">Privacy Policy</a>
+          <span className="account-legal-sep">·</span>
+          <a href="/privacy-terms#terms-conditions" className="account-legal-link">Terms &amp; Conditions</a>
+        </footer>
 
       </div>
     </div>

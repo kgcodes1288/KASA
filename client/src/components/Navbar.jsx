@@ -29,13 +29,22 @@ export default function Navbar() {
                 My Jobs
               </NavLink>
             )}
-            {/* ── NEW ── */}
-            <NavLink to="/account" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-              My Account
-            </NavLink>
-            <span className="badge" style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', fontSize: 13 }}>
-              {user.name}
-            </span>
+            <Link
+              to="/account"
+              className="badge"
+              style={{
+                background: 'var(--bg)',
+                border: '1.5px solid var(--border)',
+                fontSize: 13,
+                textDecoration: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              👤 {user.name}
+            </Link>
             <span className={`badge badge-${user.role}`}>{user.role}</span>
             <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
               Sign out

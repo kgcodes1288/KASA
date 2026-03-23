@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import HowToUseSection from '../components/HowToUseSection';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -328,11 +329,16 @@ export default function HostDashboard() {
           <div className="spinner" />
         </div>
       ) : allEmpty ? (
-        <div className="empty-state">
-          <div style={{ fontSize: 40 }}>🏠</div>
-          <h3>No listings yet</h3>
-          <p>Create your first listing to get started</p>
-        </div>
+        <>
+          <div className="empty-state">
+            <div style={{ fontSize: 40 }}>🏠</div>
+            <h3>No listings yet</h3>
+            <p>Create your first listing to get started</p>
+          </div>
+          <div style={{ marginTop: 24 }}>
+            <HowToUseSection defaultOpen={true} />
+          </div>
+        </>
       ) : (
         <>
           {/* Owned listings */}
