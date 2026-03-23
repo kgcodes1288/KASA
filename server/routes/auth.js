@@ -15,9 +15,10 @@ const normalizePhone = (phone) => phone ? phone.replace(/\s+/g, '').trim() : nul
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, phone } = req.body;
-    if (!name || !email || !password || !role)
-      return res.status(400).json({ message: 'name, email, password, role are required' });
+    const { name, email, password, phone } = req.body;
+    const role = 'host';
+    if (!name || !email || !password)
+      return res.status(400).json({ message: 'name, email, password are required' });
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(400).json({ message: 'Email already registered' });
