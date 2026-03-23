@@ -189,7 +189,7 @@ function ListingModal({ onClose, onSaved, listing }) {
 }
 
 // ── Listing Card ─────────────────────────────────────────────────────────────
-function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, syncing, expandedCalendars, toggleCalendar }) {
+function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
 
@@ -233,6 +233,20 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
         )}
       </div>
 
+      {syncErrors[l.id] && (
+        <div style={{
+          marginTop: 10,
+          padding: '8px 12px',
+          background: '#fef2f2',
+          border: '1px solid #fca5a5',
+          borderRadius: 8,
+          fontSize: 12,
+          color: '#b91c1c',
+        }}>
+          ⚠️ {syncErrors[l.id]}
+        </div>
+      )}
+
       <button
         onClick={() => toggleCalendar(l.id)}
         style={{
@@ -269,6 +283,7 @@ export default function HostDashboard() {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [syncing, setSyncing] = useState({});
+  const [syncErrors, setSyncErrors] = useState({});
   const [expandedCalendars, setExpandedCalendars] = useState({});
 
   const load = () => {
@@ -294,15 +309,18 @@ export default function HostDashboard() {
     load();
   };
 
-  const handleSync = async (id) => {
-    setSyncing((s) => ({ ...s, [id]: true }));
-    try {
-      await api.post(`/listings/${id}/sync`);
-      load();
-    } finally {
-      setSyncing((s) => ({ ...s, [id]: false }));
-    }
-  };
+const handleSync = async (id) => {
+  setSyncing((s) => ({ ...s, [id]: true }));
+  setSyncErrors((e) => ({ ...e, [id]: null }));
+  try {
+    await api.post(`/listings/${id}/sync`);
+    load();
+  } catch (err) {
+    setSyncErrors((e) => ({ ...e, [id]: 'Sync failed, please try again' }));  // ← changed
+  } finally {
+    setSyncing((s) => ({ ...s, [id]: false }));
+  }
+};
 
   const toggleCalendar = (id) =>
     setExpandedCalendars((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -359,6 +377,7 @@ export default function HostDashboard() {
                     onDelete={handleDelete}
                     onSync={handleSync}
                     syncing={syncing}
+                    syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
                     toggleCalendar={toggleCalendar}
                   />
@@ -385,6 +404,7 @@ export default function HostDashboard() {
                     onDelete={handleDelete}
                     onSync={handleSync}
                     syncing={syncing}
+                    syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
                     toggleCalendar={toggleCalendar}
                   />

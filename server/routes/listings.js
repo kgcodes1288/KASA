@@ -80,10 +80,18 @@ router.post('/:id/sync', auth, async (req, res) => {
       where: { id: req.params.id, hostId: req.user.id },
     });
     if (!listing) return res.status(404).json({ message: 'Not found' });
+
     await syncListing(listing);
-    res.json({ message: 'Sync complete', lastSynced: listing.lastSynced });
+
+    // Re-fetch to get the updated lastSynced written by syncListing
+    const updated = await prisma.listing.findUnique({
+      where: { id: req.params.id },
+    });
+
+    res.json({ message: 'Sync complete', lastSynced: updated.lastSynced });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('[sync route] error:', err.message);
+    res.status(500).json({ message: `Sync failed: ${err.message}` });
   }
 });
 

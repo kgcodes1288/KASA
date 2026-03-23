@@ -1,7 +1,6 @@
 const ical = require('node-ical');
 const cron = require('node-cron');
 const prisma = require('../lib/prisma');
-const { sendCleaningAlert } = require('./sms');
 
 async function syncListing(listing) {
   try {
@@ -20,19 +19,10 @@ async function syncListing(listing) {
       return;
     }
 
-    // Get cleaners for this listing
-    const listingWithCleaners = await prisma.listing.findUnique({
-      where: { id: listing.id },
-      include: { cleaners: { include: { cleaner: true } } },
-    });
-    const cleaners = listingWithCleaners.cleaners.map((lc) => lc.cleaner);
-
     for (const event of Object.values(events)) {
       if (event.type !== 'VEVENT') continue;
-
       const checkoutDate = event.end ? new Date(event.end) : null;
       const checkinDate = event.start ? new Date(event.start) : null;
-
       if (!checkoutDate || checkoutDate < cutoff) continue;
 
       for (const room of rooms) {
@@ -41,17 +31,11 @@ async function syncListing(listing) {
         });
         if (existing) continue;
 
-        // Assign a cleaner randomly
-        let assignedCleaner = null;
-        if (cleaners.length > 0) {
-          assignedCleaner = cleaners[Math.floor(Math.random() * cleaners.length)];
-        }
-
-        const job = await prisma.job.create({
+        await prisma.job.create({
           data: {
             listingId: listing.id,
             roomId: room.id,
-            cleanerId: assignedCleaner?.id || null,
+            cleanerId: null,
             checkoutDate,
             checkinDate,
             guestName: event.summary || 'Airbnb Guest',
@@ -61,19 +45,7 @@ async function syncListing(listing) {
             },
           },
         });
-
         console.log(`[iCal] Created job for room "${room.name}" — checkout ${checkoutDate}`);
-
-        if (assignedCleaner?.phone) {
-          await sendCleaningAlert({
-            to: assignedCleaner.phone,
-            cleanerName: assignedCleaner.name,
-            listingName: listing.name,
-            roomName: room.name,
-            checkoutDate,
-          });
-          await prisma.job.update({ where: { id: job.id }, data: { smsSent: true } });
-        }
       }
     }
 
@@ -81,6 +53,7 @@ async function syncListing(listing) {
     console.log(`[iCal] Sync complete for: ${listing.name}`);
   } catch (err) {
     console.error(`[iCal] Error syncing listing ${listing.id}:`, err.message);
+    throw err;
   }
 }
 
