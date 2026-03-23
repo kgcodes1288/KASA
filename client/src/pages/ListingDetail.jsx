@@ -323,6 +323,128 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
   );
 }
 
+/* ── Assign Maintenance Task modal ── */
+function AssignMaintenanceModal({ task, listingId, coHosts, contractors, onClose }) {
+  const [assignType, setAssignType]   = useState('contractor');
+  const [userId, setUserId]           = useState('');
+  const [phone, setPhone]             = useState('');
+  const [sending, setSending]         = useState(false);
+  const [sent, setSent]               = useState(false);
+  const [error, setError]             = useState('');
+
+  const handleAssign = async () => {
+    if (assignType === 'cohost' && !userId) { setError('Please select a co-host'); return; }
+    if (assignType === 'contractor' && !phone.trim()) { setError('Phone number is required'); return; }
+    setSending(true); setError('');
+    try {
+      await api.post(`/maintenance/${task.id}/assign`, {
+        type:   assignType,
+        userId: assignType === 'cohost' ? userId : undefined,
+        phone:  assignType === 'contractor' ? phone.trim() : undefined,
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to assign');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 440 }}>
+        <div className="modal-header">
+          <h3>Assign maintenance task</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>
+              {assignType === 'contractor' ? '📲' : '✅'}
+            </div>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>
+              {assignType === 'contractor' ? 'SMS sent!' : 'Co-host assigned!'}
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
+              {assignType === 'contractor'
+                ? 'The contractor will receive a link to mark the task complete.'
+                : 'The co-host will see this task in their dashboard.'}
+            </p>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 16 }}>
+              🔧 <strong>{task.title}</strong>
+              {task.roomName && ` — ${task.roomName}`}
+            </p>
+
+            {/* Toggle */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {['contractor', 'cohost'].map((t) => (
+                <button
+                  key={t}
+                  className={`btn btn-sm ${assignType === t ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => { setAssignType(t); setError(''); }}
+                >
+                  {t === 'contractor' ? '📲 Contractor (SMS)' : '👥 Co-host'}
+                </button>
+              ))}
+            </div>
+
+            {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
+
+            {assignType === 'contractor' && (
+              <div className="form-group">
+                <label>Phone number</label>
+                {contractors.length > 0 && (
+                  <select className="input" style={{ marginBottom: 8 }}
+                    onChange={(e) => setPhone(e.target.value)} value={phone}>
+                    <option value="">Pick a saved contractor…</option>
+                    {contractors.map((c) => (
+                      <option key={c.id} value={c.phone}>
+                        {c.name}{c.trade ? ` — ${c.trade}` : ''} · {c.phone}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input className="input" placeholder="Or enter a phone number"
+                  value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+            )}
+
+            {assignType === 'cohost' && (
+              <div className="form-group">
+                <label>Select co-host</label>
+                {coHosts.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
+                    No accepted co-hosts on this listing yet.
+                  </p>
+                ) : (
+                  <select className="input" value={userId} onChange={(e) => setUserId(e.target.value)}>
+                    <option value="">Choose a co-host…</option>
+                    {coHosts.map((ch) => (
+                      <option key={ch.userId} value={ch.userId}>{ch.user?.name} ({ch.user?.email})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAssign} disabled={sending}>
+                {sending ? 'Assigning…' : 'Assign'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── constants ── */
 const STATUS_LABEL = { pending: '⏳ Pending', in_progress: '🧹 In progress', completed: '✅ Done' };
 
@@ -381,19 +503,24 @@ export default function ListingDetail() {
   const [togglingItem, setTogglingItem]   = useState(null);
   const [tab, setTab]                     = useState('spaces');
 
+  const [coHosts, setCoHosts]                     = useState([]);
+  const [assignMaintenanceModal, setAssignMaintenanceModal] = useState(null);
+
   const load = async () => {
     setLoading(true);
     try {
-      const [lRes, rRes, jRes, cRes] = await Promise.all([
+      const [lRes, rRes, jRes, cRes, chRes] = await Promise.all([
         api.get(`/listings/${id}`),
         api.get(`/rooms/listing/${id}`),
         api.get(`/jobs`),
         api.get(`/contractors`),
+        api.get(`/listings/${id}/cohosts`),
       ]);
       setListing(lRes.data);
       setAllRooms(rRes.data);
       setJobs(jRes.data.filter((j) => j.listing?.id === id || j.listing === id));
       setContractors(cRes.data);
+      setCoHosts(chRes.data.filter((ch) => ch.status === 'ACCEPTED')); 
     } finally {
       setLoading(false);
     }
@@ -641,10 +768,18 @@ export default function ListingDetail() {
                                               {' · Next: '}<strong>{new Date(task.nextDueAt).toLocaleDateString()}</strong>
                                             </p>
                                           </div>
-                                          <button className="btn btn-danger btn-sm"
-                                            onClick={() => handleDeleteTask(task.id)}>
-                                            🗑
-                                          </button>
+                                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                                            {task.status !== 'COMPLETED' && (
+                                              <button className="btn btn-secondary btn-sm"
+                                                onClick={() => setAssignMaintenanceModal({ ...task, roomName: entity.name })}>
+                                                👤 Assign
+                                              </button>
+                                            )}
+                                            <button className="btn btn-danger btn-sm"
+                                              onClick={() => handleDeleteTask(task.id)}>
+                                              🗑
+                                            </button>
+                                          </div>
                                         </div>
                                       </div>
                                     ))}
@@ -935,11 +1070,20 @@ export default function ListingDetail() {
                           )}
                           <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
                         </div>
-                        <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, flexShrink: 0,
-                          fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
-                          color: colorSet.color }}>
-                          {TASK_STATUS_LABEL[item.status]}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                          {!isDone && (
+                            <button className="btn btn-secondary btn-sm"
+                              style={{ fontSize: 11 }}
+                              onClick={() => setAssignMaintenanceModal(item)}>
+                              👤 Assign
+                            </button>
+                          )}
+                          <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
+                            fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
+                            color: colorSet.color }}>
+                            {TASK_STATUS_LABEL[item.status]}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -970,6 +1114,15 @@ export default function ListingDetail() {
           contractors={contractors}
           onClose={() => setSendLinkModal(null)}
           onSent={() => loadTokenStatuses(jobs)}
+        />
+      )}
+      {assignMaintenanceModal && (
+        <AssignMaintenanceModal
+          task={assignMaintenanceModal}
+          listingId={id}
+          coHosts={coHosts}
+          contractors={contractors}
+          onClose={() => setAssignMaintenanceModal(null)}
         />
       )}
     </div>

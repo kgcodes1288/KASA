@@ -9,7 +9,8 @@ import ListingDetail from './pages/ListingDetail';
 import JobDetail from './pages/JobDetail';
 import AccountPage from './pages/AccountPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
-import ContractorJob from './pages/ContractorJob';   // ← new
+import ContractorJob from './pages/ContractorJob';
+import ContractorMaintenance from './pages/ContractorMaintenance';  // ← new
 import LegalPage from './pages/LegalPage';
 
 function PrivateRoute({ children, role }) {
@@ -43,7 +44,8 @@ export default function App() {
         <Routes>
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/job/:token" element={<ContractorJob />} />  {/* ← new, no auth */}
+          <Route path="/job/:token" element={<ContractorJob />} />
+          <Route path="/maintenance/:token" element={<ContractorMaintenance />} />  {/* ← new, no auth */}
           <Route path="/" element={<PrivateRoute><RoleRedirect /></PrivateRoute>} />
           <Route path="/host" element={
             <PrivateRoute role="host"><Layout><HostDashboard /></Layout></PrivateRoute>

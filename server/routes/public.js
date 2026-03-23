@@ -19,7 +19,6 @@ router.get('/job/:token', async (req, res) => {
       return res.status(410).json({ message: 'This link has expired' });
     }
 
-    // Find all jobs for this listing + checkout date
     const checkoutStart = new Date(jobToken.checkoutDate);
     checkoutStart.setHours(0, 0, 0, 0);
     const checkoutEnd = new Date(jobToken.checkoutDate);
@@ -37,7 +36,6 @@ router.get('/job/:token', async (req, res) => {
       orderBy: { room: { name: 'asc' } },
     });
 
-    // Deduplicate by room name, keep first occurrence
     const seen = new Set();
     const deduped = jobs.filter((j) => {
       const name = j.room?.name || 'Room';
@@ -66,7 +64,7 @@ router.get('/job/:token', async (req, res) => {
   }
 });
 
-// POST /api/public/job/:token/accept — contractor accepts the job
+// POST /api/public/job/:token/accept
 router.post('/job/:token/accept', async (req, res) => {
   try {
     const jobToken = await prisma.jobToken.findUnique({
@@ -74,18 +72,9 @@ router.post('/job/:token/accept', async (req, res) => {
     });
 
     if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
-
-    if (jobToken.status === 'WITHDRAWN') {
-      return res.status(410).json({ message: 'This job assignment has been withdrawn' });
-    }
-
-    if (new Date() > new Date(jobToken.expiresAt)) {
-      return res.status(410).json({ message: 'This link has expired' });
-    }
-
-    if (jobToken.status === 'ACCEPTED') {
-      return res.json({ message: 'Already accepted' });
-    }
+    if (jobToken.status === 'WITHDRAWN') return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    if (new Date() > new Date(jobToken.expiresAt)) return res.status(410).json({ message: 'This link has expired' });
+    if (jobToken.status === 'ACCEPTED') return res.json({ message: 'Already accepted' });
 
     await prisma.jobToken.update({
       where: { token: req.params.token },
@@ -106,43 +95,95 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
     });
 
     if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
-
-    if (jobToken.status === 'WITHDRAWN') {
-      return res.status(410).json({ message: 'This job assignment has been withdrawn' });
-    }
-
-    if (new Date() > new Date(jobToken.expiresAt)) {
-      return res.status(410).json({ message: 'This link has expired' });
-    }
+    if (jobToken.status === 'WITHDRAWN') return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    if (new Date() > new Date(jobToken.expiresAt)) return res.status(410).json({ message: 'This link has expired' });
 
     const { completed } = req.body;
 
-    // Verify the checklist item belongs to a job under this token's listing + checkout
     const item = await prisma.jobChecklist.findUnique({
       where: { id: req.params.itemId },
       include: { job: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.job.listingId !== jobToken.listingId) {
-      return res.status(403).json({ message: 'Not authorised' });
-    }
+    if (item.job.listingId !== jobToken.listingId) return res.status(403).json({ message: 'Not authorised' });
 
-    // Toggle the item
     await prisma.jobChecklist.update({
       where: { id: req.params.itemId },
       data:  { completed, completedAt: completed ? new Date() : null },
     });
 
-    // Recalculate job status
     const allItems = await prisma.jobChecklist.findMany({ where: { jobId: item.jobId } });
     const done     = allItems.filter((i) => i.completed).length;
     const status   = done === allItems.length ? 'completed' : done > 0 ? 'in_progress' : 'pending';
-    await prisma.job.update({
-      where: { id: item.jobId },
-      data:  { status },
-    });
+    await prisma.job.update({ where: { id: item.jobId }, data: { status } });
 
     res.json({ success: true, completed, status });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Maintenance token routes ──────────────────────────────────────────────────
+
+// GET /api/public/maintenance/:token — return task details for contractor
+router.get('/maintenance/:token', async (req, res) => {
+  try {
+    const mt = await prisma.maintenanceToken.findUnique({
+      where: { token: req.params.token },
+      include: {
+        task: {
+          include: {
+            listing: { select: { id: true, name: true, address: true } },
+            room:    { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!mt) return res.status(404).json({ message: 'Invalid link' });
+    if (new Date() > new Date(mt.expiresAt)) return res.status(410).json({ message: 'This link has expired' });
+
+    res.json({
+      taskId:       mt.task.id,
+      title:        mt.task.title,
+      notes:        mt.task.notes,
+      status:       mt.task.status,
+      nextDueAt:    mt.task.nextDueAt,
+      listingName:  mt.task.listing.name,
+      listingAddress: mt.task.listing.address,
+      roomName:     mt.task.room?.name || null,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/public/maintenance/:token/complete — contractor marks task done
+router.patch('/maintenance/:token/complete', async (req, res) => {
+  try {
+    const mt = await prisma.maintenanceToken.findUnique({
+      where: { token: req.params.token },
+      include: { task: true },
+    });
+
+    if (!mt) return res.status(404).json({ message: 'Invalid link' });
+    if (new Date() > new Date(mt.expiresAt)) return res.status(410).json({ message: 'This link has expired' });
+
+    const now = new Date();
+    const nextDueAt = new Date(mt.task.nextDueAt);
+    nextDueAt.setMonth(nextDueAt.getMonth() + mt.task.intervalMonths);
+
+    await prisma.maintenanceTask.update({
+      where: { id: mt.task.id },
+      data: {
+        status:          'COMPLETED',
+        lastServicedAt:  now,
+        nextDueAt,
+        notificationSent: false,
+      },
+    });
+
+    res.json({ message: 'Task marked complete' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

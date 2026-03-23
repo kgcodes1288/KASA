@@ -17,11 +17,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  listings         Listing[]       @relation("HostListings")
-  jobs             Job[]
-  coHosting        ListingCoHost[] @relation("CoHostUser")
-  maintenanceTasks MaintenanceTask[]
-  contractors      Contractor[]
+  listings              Listing[]       @relation("HostListings")
+  jobs                  Job[]
+  coHosting             ListingCoHost[] @relation("CoHostUser")
+  maintenanceTasks      MaintenanceTask[]
+  contractors           Contractor[]
 }
 
 enum Role {
@@ -39,12 +39,12 @@ model Listing {
   updatedAt   DateTime  @updatedAt
   hostId      String
 
-  host             User            @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
-  rooms            Room[]
-  jobs             Job[]
-  coHosts          ListingCoHost[] @relation("CoHostListing")
-  maintenanceTasks MaintenanceTask[]
-  jobTokens        JobToken[]
+  host              User              @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+  rooms             Room[]
+  jobs              Job[]
+  coHosts           ListingCoHost[]   @relation("CoHostListing")
+  maintenanceTasks  MaintenanceTask[]
+  jobTokens         JobToken[]
 }
 
 model ListingCoHost {
@@ -107,15 +107,28 @@ model MaintenanceTask {
   roomId           String?
   assignedUserId   String?
 
-  listing      Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  room         Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  assignedUser User?   @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  listing            Listing              @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  room               Room?                @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  assignedUser       User?                @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  maintenanceTokens  MaintenanceToken[]
 }
 
 enum TaskStatus {
   PENDING
   COMPLETED
   OVERDUE
+}
+
+// ── New: contractor token for maintenance tasks ──────────────────────────────
+model MaintenanceToken {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  phone       String
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  taskId      String
+
+  task        MaintenanceTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }
 
 model ChecklistTemplate {
