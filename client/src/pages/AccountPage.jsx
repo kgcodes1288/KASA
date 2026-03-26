@@ -102,7 +102,7 @@ function ContractorsSection() {
   const [formError, setFormError]     = useState('');
   const [saving, setSaving]           = useState(false);
 
-  const emptyForm = { name: '', phone: '', trade: '', notes: '' };
+  const emptyForm = { name: '', phone: '', trade: '', notes: '', smsConsent: false };
   const [form, setForm] = useState(emptyForm);
 
   const load = async () => {
@@ -126,7 +126,7 @@ function ContractorsSection() {
 
   const openEdit = (c) => {
     setEditingId(c.id);
-    setForm({ name: c.name, phone: c.phone, trade: c.trade || '', notes: c.notes || '' });
+    setForm({ name: c.name, phone: c.phone, trade: c.trade || '', notes: c.notes || '', smsConsent: false });
     setFormError('');
     setShowForm(true);
   };
@@ -145,9 +145,20 @@ function ContractorsSection() {
     setFormError('');
     try {
       if (editingId) {
-        await api.put(`/contractors/${editingId}`, form);
+        await api.put(`/contractors/${editingId}`, {
+          name: form.name,
+          phone: form.phone,
+          trade: form.trade,
+          notes: form.notes,
+        });
       } else {
-        await api.post('/contractors', form);
+        await api.post('/contractors', {
+          name: form.name,
+          phone: form.phone,
+          trade: form.trade,
+          notes: form.notes,
+          smsConsent: form.smsConsent,
+        });
       }
       closeForm();
       load();
@@ -239,10 +250,32 @@ function ContractorsSection() {
                 />
               </div>
             </div>
+
+            {/* SMS Consent — only shown when adding, not editing */}
+            {!editingId && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
+                padding: '10px 12px', borderRadius: 8, background: '#f0fdf4',
+                border: '1px solid #86efac', marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={form.smsConsent}
+                  onChange={(e) => setForm({ ...form, smsConsent: e.target.checked })}
+                  style={{ marginTop: 2, width: 15, height: 15, flexShrink: 0, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
+                  I confirm this person has agreed to receive SMS messages from CleanStay regarding job assignments.
+                </span>
+              </label>
+            )}
           </div>
+
           {formError && <p className="form-msg error" style={{ marginTop: 10 }}>{formError}</p>}
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSave}
+              disabled={saving || (!editingId && !form.smsConsent)}
+            >
               {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Add Contractor'}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={closeForm} disabled={saving}>
@@ -335,10 +368,12 @@ function CoHostSection() {
       const { data } = await api.post(`/listings/${listingId}/cohosts/invite`, {
         phone: form.phone,
         role: form.role,
+        smsConsent: form.smsConsent === true,
       });
       setField(listingId, 'msg', { type: 'success', text: data.message });
       setField(listingId, 'phone', '');
       setField(listingId, 'role', '');
+      setField(listingId, 'smsConsent', false);
       load();
     } catch (err) {
       setField(listingId, 'msg', {
@@ -457,11 +492,27 @@ function CoHostSection() {
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => handleInvite(l.id)}
-                            disabled={form.loading || !form.phone || !form.role}
+                            disabled={form.loading || !form.phone || !form.role || !form.smsConsent}
                           >
                             {form.loading ? 'Sending…' : 'Send Invite'}
                           </button>
                         </div>
+
+                        {/* SMS Consent checkbox */}
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10,
+                          cursor: 'pointer', padding: '10px 12px', borderRadius: 8,
+                          background: '#f0fdf4', border: '1px solid #86efac', marginTop: 10 }}>
+                          <input
+                            type="checkbox"
+                            checked={form.smsConsent || false}
+                            onChange={(e) => setField(l.id, 'smsConsent', e.target.checked)}
+                            style={{ marginTop: 2, width: 15, height: 15, flexShrink: 0, cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
+                            I confirm this person has agreed to receive SMS messages from CleanStay.
+                          </span>
+                        </label>
+
                         {form.msg && (
                           <p className={`form-msg ${form.msg.type}`} style={{ marginTop: 8 }}>
                             {form.msg.text}
@@ -916,18 +967,16 @@ export default function AccountPage() {
           </>
         )}
 
-
-
         {/* ── Co-hosts Tab (hosts only) ── */}
         {activeTab === 'Co-hosts' && <CoHostSection />}
 
         {/* ── Contractors Tab (hosts only) ── */}
         {activeTab === 'Contractors' && <ContractorsSection />}
 
-                  {/* ── How To Use ── */}
-          <HowToUseSection />
+        {/* ── How To Use ── */}
+        <HowToUseSection />
 
-          {/* ── Legal Footer ── */}
+        {/* ── Legal Footer ── */}
         <footer className="account-legal-footer">
           <a href="/privacy-terms#privacy-policy" className="account-legal-link">Privacy Policy</a>
           <span className="account-legal-sep">·</span>

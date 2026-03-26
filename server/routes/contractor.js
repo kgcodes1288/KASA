@@ -22,18 +22,18 @@ router.get('/', authenticate, async (req, res) => {
 
 // POST /api/contractors
 router.post('/', authenticate, async (req, res) => {
-  const { name, phone, trade, notes } = req.body;
+  const { name, phone, trade, notes, smsConsent } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   if (!phone || !phone.trim()) return res.status(400).json({ error: 'Phone is required' });
-
   try {
     const contractor = await prisma.contractor.create({
       data: {
-        name:  name.trim(),
-        phone: normalizePhone(phone),
-        trade: trade?.trim() || null,
-        notes: notes?.trim() || null,
-        hostId: req.user.id,
+        name:       name.trim(),
+        phone:      normalizePhone(phone),
+        trade:      trade?.trim() || null,
+        notes:      notes?.trim() || null,
+        smsConsent: smsConsent === true,
+        hostId:     req.user.id,
       },
     });
     res.status(201).json(contractor);
@@ -48,13 +48,11 @@ router.put('/:id', authenticate, async (req, res) => {
   const { name, phone, trade, notes } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   if (!phone || !phone.trim()) return res.status(400).json({ error: 'Phone is required' });
-
   try {
     const existing = await prisma.contractor.findFirst({
       where: { id: req.params.id, hostId: req.user.id },
     });
     if (!existing) return res.status(404).json({ error: 'Contractor not found' });
-
     const contractor = await prisma.contractor.update({
       where: { id: req.params.id },
       data: {
@@ -78,7 +76,6 @@ router.delete('/:id', authenticate, async (req, res) => {
       where: { id: req.params.id, hostId: req.user.id },
     });
     if (!existing) return res.status(404).json({ error: 'Contractor not found' });
-
     await prisma.contractor.delete({ where: { id: req.params.id } });
     res.json({ message: 'Contractor deleted' });
   } catch (err) {

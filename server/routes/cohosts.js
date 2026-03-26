@@ -34,7 +34,7 @@ async function getListingRole(listingId, userId) {
 // POST /api/listings/:id/cohosts/invite
 router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const { id: listingId } = req.params;
-  const { phone: rawPhone, role } = req.body;
+  const { phone: rawPhone, role, smsConsent } = req.body;
   const phone = normalizePhone(rawPhone);
   const requesterId = req.user.id;
 
@@ -77,11 +77,12 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const coHost = await prisma.listingCoHost.create({
     data: {
       listingId,
-      userId: invitee ? invitee.id : null,
+      userId:     invitee ? invitee.id : null,
       role,
-      status: 'PENDING',
+      status:     'PENDING',
       inviteToken,
       invitePhone: phone,
+      smsConsent:  smsConsent === true,
     },
   });
 
@@ -90,14 +91,13 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
 
   await twilioClient.messages.create({
-    body: `Hi! ${req.user.name} has invited you to co-host "${listing.name}" on CleanStay as ${roleLabel}. Tap to join: ${link}. Reply STOP to opt out.`,
+    body: `CleanStay: ${req.user.name} has invited you to co-host "${listing.name}" as ${roleLabel}. Tap to join: ${link}. Reply STOP to opt out.`,
     from: process.env.TWILIO_PHONE,
     to: phone,
   });
 
-    res.status(201).json({ message: 'Invite sent via SMS.', coHost });
+  res.status(201).json({ message: 'Invite sent via SMS.', coHost });
 });
-
 
 // GET /api/listings/:id/cohosts
 router.get('/:id/cohosts', authenticate2, async (req, res) => {
@@ -139,7 +139,6 @@ router.get('/my-listings', authenticate2, async (req, res) => {
 });
 
 // GET /api/cohosts/pending
-// Returns pending invites for the logged-in user
 router.get('/pending', authenticate2, async (req, res) => {
   const pending = await prisma.listingCoHost.findMany({
     where: { userId: req.user.id, status: 'PENDING' },
@@ -149,7 +148,6 @@ router.get('/pending', authenticate2, async (req, res) => {
     },
   });
 
-  // Also include host info
   const withHost = await Promise.all(
     pending.map(async (p) => {
       const listing = await prisma.listing.findUnique({
