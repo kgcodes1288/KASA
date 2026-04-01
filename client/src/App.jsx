@@ -10,8 +10,9 @@ import JobDetail from './pages/JobDetail';
 import AccountPage from './pages/AccountPage';
 import AcceptInvitePage from './pages/AcceptInvitePage';
 import ContractorJob from './pages/ContractorJob';
-import ContractorMaintenance from './pages/ContractorMaintenance';  // ← new
+import ContractorMaintenance from './pages/ContractorMaintenance';
 import LegalPage from './pages/LegalPage';
+import ComplianceTerms from './pages/ComplianceTerms';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -45,7 +46,8 @@ export default function App() {
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/job/:token" element={<ContractorJob />} />
-          <Route path="/maintenance/:token" element={<ContractorMaintenance />} />  {/* ← new, no auth */}
+          <Route path="/maintenance/:token" element={<ContractorMaintenance />} />
+          <Route path="/compliance-terms" element={<ComplianceTerms />} />
           <Route path="/" element={<PrivateRoute><RoleRedirect /></PrivateRoute>} />
           <Route path="/host" element={
             <PrivateRoute role="host"><Layout><HostDashboard /></Layout></PrivateRoute>
