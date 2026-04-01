@@ -3,6 +3,13 @@ const prisma = require('../lib/prisma');
 const authenticate = require('../middleware/auth');
 const crypto = require('crypto');
 const twilio = require('twilio');
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 const twilioClient = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -213,6 +220,18 @@ taskRouter.delete('/:taskId', authenticate, async (req, res) => {
 
     const { canWrite } = await getAccess(task.listingId, req.user.id);
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
+
+    // Delete Cloudinary assets before removing the DB record
+    if (task.attachments && task.attachments.length > 0) {
+      await Promise.allSettled(task.attachments.map((url) => {
+        // Extract public_id from URL: everything after /upload/vXXXX/ (strip version)
+        const match = url.match(/\/(?:image|raw)\/upload\/(?:v\d+\/)?(.+)$/);
+        if (!match) return Promise.resolve();
+        const publicId = match[1].replace(/\.[^/.]+$/, ''); // strip extension for images
+        const resourceType = url.includes('/raw/upload/') ? 'raw' : 'image';
+        return cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+      }));
+    }
 
     await prisma.maintenanceTask.delete({ where: { id: req.params.taskId } });
     res.json({ message: 'Deleted' });
