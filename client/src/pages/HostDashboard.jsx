@@ -198,6 +198,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
   const [title, setTitle]             = useState('');
   const [notes, setNotes]             = useState('');
   const [taskType, setTaskType]       = useState('ACTION');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [assignedTo, setAssignedTo]   = useState('');
   const [scope, setScope]             = useState('general');
   const [roomId, setRoomId]           = useState('');
@@ -254,6 +255,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
         title: title.trim(),
         notes: notes.trim() || null,
         taskType,
+        paymentAmount: taskType === 'PAYMENT_REQUEST' ? paymentAmount.trim() || null : null,
         intervalMonths: scheduleType === 'recurring' ? parseInt(intervalMonths) : 0,
         isRecurring: scheduleType === 'recurring',
         lastServicedAt: scheduleType === 'recurring' ? lastServicedAt || null : null,
@@ -311,7 +313,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
 
             {/* Title */}
             <div className="form-group">
-              <label>Title</label>
+              <label>{taskType === 'PAYMENT_REQUEST' ? "What's the payment for?" : 'Title'}</label>
               <input
                 className="input"
                 placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Cleaning fee reimbursement' : 'e.g. Fix the broken lock'}
@@ -320,10 +322,27 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
               />
             </div>
 
+            {/* Payment amount — only for PAYMENT_REQUEST */}
+            {taskType === 'PAYMENT_REQUEST' && (
+              <div className="form-group">
+                <label>Payment amount <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+                <input
+                  className="input"
+                  placeholder="e.g. $150"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+              </div>
+            )}
+
             {/* Notes */}
             <div className="form-group">
-              <label>Notes <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
-              <textarea className="input" rows={2} placeholder="Any extra details…"
+              <label>
+                {taskType === 'PAYMENT_REQUEST' ? 'Any additional details' : 'Notes'}
+                {' '}<span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span>
+              </label>
+              <textarea className="input" rows={2}
+                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Invoice attached, bank transfer preferred…' : 'Any extra details…'}
                 value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
             </div>
 
