@@ -30,7 +30,12 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
 
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'kasa-workplanner/tasks', resource_type: resourceType },
+        {
+          folder: 'kasa-workplanner/tasks',
+          resource_type: resourceType,
+          use_filename: true,
+          unique_filename: true,
+        },
         (err, result) => (err ? reject(err) : resolve(result))
       );
       stream.end(req.file.buffer);
