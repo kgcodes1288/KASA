@@ -199,6 +199,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
   const [notes, setNotes]             = useState('');
   const [taskType, setTaskType]       = useState('ACTION');
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [attachedFiles, setAttachedFiles] = useState([]); // [{ name, url, uploading, error }]
   const [assignedTo, setAssignedTo]   = useState('');
   const [scope, setScope]             = useState('general');
   const [roomId, setRoomId]           = useState('');
@@ -244,11 +245,40 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
         listing.host ? { value: listing.host.id, label: `Host: ${listing.host.name}` } : null,
       ].filter(Boolean);
 
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    e.target.value = '';
+    const newEntries = files.map((f) => ({ name: f.name, url: null, uploading: true, error: null }));
+    setAttachedFiles((prev) => [...prev, ...newEntries]);
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const idx = attachedFiles.length + i; // stable index relative to start of this batch
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await api.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setAttachedFiles((prev) =>
+          prev.map((f, j) => (j === idx ? { ...f, url: res.data.url, uploading: false } : f))
+        );
+      } catch {
+        setAttachedFiles((prev) =>
+          prev.map((f, j) => (j === idx ? { ...f, uploading: false, error: 'Upload failed' } : f))
+        );
+      }
+    }
+  };
+
+  const removeFile = (idx) => setAttachedFiles((prev) => prev.filter((_, j) => j !== idx));
+
   const handleSave = async () => {
     if (!title.trim()) { setError('Title is required'); return; }
     const due = scheduleType === 'one_time' ? dueDate : nextDueAt;
     if (!due) { setError('Due date is required'); return; }
     if (scope === 'room' && !roomId) { setError('Please select a room'); return; }
+    if (attachedFiles.some((f) => f.uploading)) { setError('Please wait for uploads to finish'); return; }
     setSaving(true); setError('');
     try {
       await api.post(`/listings/${listing.id}/maintenance`, {
@@ -256,6 +286,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
         notes: notes.trim() || null,
         taskType,
         paymentAmount: taskType === 'PAYMENT_REQUEST' ? paymentAmount.trim() || null : null,
+        attachments: attachedFiles.filter((f) => f.url).map((f) => f.url),
         intervalMonths: scheduleType === 'recurring' ? parseInt(intervalMonths) : 0,
         isRecurring: scheduleType === 'recurring',
         lastServicedAt: scheduleType === 'recurring' ? lastServicedAt || null : null,
@@ -344,6 +375,45 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
               <textarea className="input" rows={2}
                 placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Invoice attached, bank transfer preferred…' : 'Any extra details…'}
                 value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
+            </div>
+
+            {/* Attachments */}
+            <div className="form-group">
+              <label>Attachments <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+              {attachedFiles.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                  {attachedFiles.map((f, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '6px 10px', borderRadius: 7, fontSize: 12,
+                      background: f.error ? '#fef2f2' : '#f0f9ff',
+                      border: `1px solid ${f.error ? '#fca5a5' : '#bae6fd'}`,
+                      color: f.error ? '#b91c1c' : '#0c4a6e',
+                    }}>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>
+                        {f.uploading ? '⏳ ' : f.error ? '⚠️ ' : '📎 '}{f.name}
+                        {f.error && ` — ${f.error}`}
+                      </span>
+                      {!f.uploading && (
+                        <button onClick={() => removeFile(i)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1, color: 'inherit', flexShrink: 0 }}>
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                padding: '7px 12px', borderRadius: 8, border: '1.5px dashed var(--border)',
+                fontSize: 13, color: 'var(--ink-soft)', background: 'var(--bg)',
+              }}>
+                📎 Choose files
+                <input type="file" multiple accept="image/*,application/pdf"
+                  onChange={handleFileChange} style={{ display: 'none' }} />
+              </label>
+              <p style={{ fontSize: 11, color: 'var(--ink-ghost)', marginTop: 5 }}>Images or PDFs, up to 10 MB each</p>
             </div>
 
             {/* Assigned to */}
