@@ -594,6 +594,11 @@ export default function ListingDetail() {
     loadMaintenance();
   };
 
+  const handleCompleteTask = async (taskId) => {
+    await api.patch(`/maintenance/${taskId}/complete`);
+    loadMaintenance();
+  };
+
   const handleToggleChecklistItem = async (jobId, itemId, currentCompleted) => {
     setTogglingItem(itemId);
     try {
@@ -956,10 +961,19 @@ export default function ListingDetail() {
                                   </div>
                                 )}
                               </div>
-                              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
-                                background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)', color: colorSet.color, marginLeft: 10, flexShrink: 0 }}>
-                                {TASK_STATUS_LABEL[item.status]}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 10, flexShrink: 0 }}>
+                                {!isDone && (
+                                  <button className="btn btn-secondary btn-sm"
+                                    style={{ fontSize: 11 }}
+                                    onClick={() => handleCompleteTask(item.id)}>
+                                    ✅ Mark complete
+                                  </button>
+                                )}
+                                <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
+                                  background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)', color: colorSet.color }}>
+                                  {TASK_STATUS_LABEL[item.status]}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         );
@@ -1189,13 +1203,20 @@ export default function ListingDetail() {
                             </div>
                           )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 10 }}>
                           {!isDone && (
-                            <button className="btn btn-secondary btn-sm"
-                              style={{ fontSize: 11 }}
-                              onClick={() => setAssignMaintenanceModal(item)}>
-                              👤 Assign
-                            </button>
+                            <>
+                              <button className="btn btn-secondary btn-sm"
+                                style={{ fontSize: 11 }}
+                                onClick={() => setAssignMaintenanceModal(item)}>
+                                👤 Assign
+                              </button>
+                              <button className="btn btn-secondary btn-sm"
+                                style={{ fontSize: 11 }}
+                                onClick={() => handleCompleteTask(item.id)}>
+                                ✅ Mark complete
+                              </button>
+                            </>
                           )}
                           <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
                             fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
