@@ -41,6 +41,7 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
           folder: 'kasa-workplanner/tasks',
           resource_type: resourceType,
           public_id: publicId,
+          access_mode: 'public',
         },
         (err, result) => (err ? reject(err) : resolve(result))
       );
