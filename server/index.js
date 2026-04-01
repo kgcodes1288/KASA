@@ -24,7 +24,8 @@ app.use('/api/users',       require('./routes/users'));
 app.use('/api/cohosts',     require('./routes/cohosts'));
 app.use('/api/maintenance', taskRouter);
 app.use('/api/contractors', require('./routes/contractor'));
-app.use('/api/public',      require('./routes/public'));   // ← new
+app.use('/api/public',      require('./routes/public'));
+app.use('/api/upload',      require('./routes/upload'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 

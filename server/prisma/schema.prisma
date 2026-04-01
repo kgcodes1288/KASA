@@ -102,6 +102,7 @@ model MaintenanceTask {
   isRecurring      Boolean    @default(true)
   taskType         TaskType   @default(MAINTENANCE)
   paymentAmount    String?
+  attachments      String[]   @default([])
   lastServicedAt   DateTime?
   nextDueAt        DateTime
   status           TaskStatus @default(PENDING)
