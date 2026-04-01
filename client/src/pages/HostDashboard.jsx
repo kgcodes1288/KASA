@@ -245,30 +245,11 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
         listing.host ? { value: listing.host.id, label: `Host: ${listing.host.name}` } : null,
       ].filter(Boolean);
 
-  const handleFileChange = async (e) => {
+  const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     e.target.value = '';
-    const newEntries = files.map((f) => ({ name: f.name, url: null, uploading: true, error: null }));
+    const newEntries = files.map((f) => ({ name: f.name, file: f, error: null }));
     setAttachedFiles((prev) => [...prev, ...newEntries]);
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const idx = attachedFiles.length + i; // stable index relative to start of this batch
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const res = await api.post('/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        setAttachedFiles((prev) =>
-          prev.map((f, j) => (j === idx ? { ...f, url: res.data.url, uploading: false } : f))
-        );
-      } catch {
-        setAttachedFiles((prev) =>
-          prev.map((f, j) => (j === idx ? { ...f, uploading: false, error: 'Upload failed' } : f))
-        );
-      }
-    }
   };
 
   const removeFile = (idx) => setAttachedFiles((prev) => prev.filter((_, j) => j !== idx));
@@ -278,15 +259,25 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
     const due = scheduleType === 'one_time' ? dueDate : nextDueAt;
     if (!due) { setError('Due date is required'); return; }
     if (scope === 'room' && !roomId) { setError('Please select a room'); return; }
-    if (attachedFiles.some((f) => f.uploading)) { setError('Please wait for uploads to finish'); return; }
     setSaving(true); setError('');
     try {
+      // Upload all files at submit time
+      const uploadedUrls = [];
+      for (const entry of attachedFiles) {
+        const formData = new FormData();
+        formData.append('file', entry.file);
+        const res = await api.post('/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        uploadedUrls.push(res.data.url);
+      }
+
       await api.post(`/listings/${listing.id}/maintenance`, {
         title: title.trim(),
         notes: notes.trim() || null,
         taskType,
         paymentAmount: taskType === 'PAYMENT_REQUEST' ? paymentAmount.trim() || null : null,
-        attachments: attachedFiles.filter((f) => f.url).map((f) => f.url),
+        attachments: uploadedUrls,
         intervalMonths: scheduleType === 'recurring' ? parseInt(intervalMonths) : 0,
         isRecurring: scheduleType === 'recurring',
         lastServicedAt: scheduleType === 'recurring' ? lastServicedAt || null : null,
@@ -386,20 +377,15 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
                     <div key={i} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       padding: '6px 10px', borderRadius: 7, fontSize: 12,
-                      background: f.error ? '#fef2f2' : '#f0f9ff',
-                      border: `1px solid ${f.error ? '#fca5a5' : '#bae6fd'}`,
-                      color: f.error ? '#b91c1c' : '#0c4a6e',
+                      background: '#f0f9ff', border: '1px solid #bae6fd', color: '#0c4a6e',
                     }}>
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>
-                        {f.uploading ? '⏳ ' : f.error ? '⚠️ ' : '📎 '}{f.name}
-                        {f.error && ` — ${f.error}`}
+                        📎 {f.name}
                       </span>
-                      {!f.uploading && (
-                        <button onClick={() => removeFile(i)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1, color: 'inherit', flexShrink: 0 }}>
-                          ×
-                        </button>
-                      )}
+                      <button onClick={() => removeFile(i)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, lineHeight: 1, color: 'inherit', flexShrink: 0 }}>
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>
