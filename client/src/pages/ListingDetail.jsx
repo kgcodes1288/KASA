@@ -949,7 +949,7 @@ export default function ListingDetail() {
                                 {item.attachments.length > 0 && (
                                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                                     {item.attachments.map((url, i) => {
-                                      const isImage = url.includes('/image/upload/');
+                                      const isImage = url.includes('/image/upload/') && !url.toLowerCase().includes('.pdf');
                                       return !isImage ? (
                                         <a key={i} href={url} target="_blank" rel="noreferrer"
                                           style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6,
