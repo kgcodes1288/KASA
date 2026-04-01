@@ -82,7 +82,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     if (!found) return res.status(404).json({ message: 'Listing not found' });
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
 
-    const { title, notes, intervalMonths, lastServicedAt, nextDueAt, roomId, assignedUserId, taskType, isRecurring } = req.body;
+    const { title, notes, intervalMonths, lastServicedAt, nextDueAt, roomId, assignedUserId, taskType, isRecurring, paymentAmount } = req.body;
     if (!title || !nextDueAt)
       return res.status(400).json({ message: 'title and nextDueAt are required' });
 
@@ -97,6 +97,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         intervalMonths: recurring ? parseInt(intervalMonths) : 0,
         isRecurring: recurring,
         taskType: taskType || 'MAINTENANCE',
+        paymentAmount: paymentAmount || null,
         lastServicedAt: lastServicedAt ? new Date(lastServicedAt) : null,
         nextDueAt: new Date(nextDueAt),
         listingId: req.params.id,

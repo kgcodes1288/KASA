@@ -101,6 +101,7 @@ model MaintenanceTask {
   intervalMonths   Int
   isRecurring      Boolean    @default(true)
   taskType         TaskType   @default(MAINTENANCE)
+  paymentAmount    String?
   lastServicedAt   DateTime?
   nextDueAt        DateTime
   status           TaskStatus @default(PENDING)
