@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api';
+import { useAuth } from '../context/AuthContext';
 
 /* ── Room / Appliance / Space modal ── */
 function RoomModal({ listingId, onClose, onSaved, room }) {
@@ -484,6 +485,7 @@ const TOKEN_STATUS_LABEL = {
 
 /* ── Main component ── */
 export default function ListingDetail() {
+  const { user: currentUser } = useAuth();
   const { id } = useParams();
   const [listing, setListing]             = useState(null);
   const [allRooms, setAllRooms]           = useState([]);
@@ -815,6 +817,11 @@ export default function ListingDetail() {
             roomName: r.name,
             notes: t.notes,
             intervalMonths: t.intervalMonths,
+            taskType: t.taskType || 'MAINTENANCE',
+            isRecurring: t.isRecurring !== false,
+            paymentAmount: t.paymentAmount || null,
+            attachments: t.attachments || [],
+            assignedUser: t.assignedUser || null,
           }))
         );
 
@@ -855,9 +862,11 @@ export default function ListingDetail() {
           return 'pending';
         };
 
-        const allItems = [...cleaningGroups, ...maintItems].sort(
+        const sorted = [...cleaningGroups, ...maintItems].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
+        const myItems    = sorted.filter((i) => i._type === 'maintenance' && i.assignedUser?.id === currentUser?.id);
+        const otherItems = sorted.filter((i) => !(i._type === 'maintenance' && i.assignedUser?.id === currentUser?.id));
 
         const JOB_COLORS = {
           active: { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' },
@@ -865,6 +874,10 @@ export default function ListingDetail() {
         };
         const MAINT_COLORS = {
           active: { background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e' },
+          done:   { background: '#fafaf9', border: '1px solid #e7e5e4', color: '#a8a29e' },
+        };
+        const MY_TASK_COLORS = {
+          active: { background: '#f5f3ff', border: '1px solid #c4b5fd', color: '#5b21b6' },
           done:   { background: '#fafaf9', border: '1px solid #e7e5e4', color: '#a8a29e' },
         };
 
@@ -884,17 +897,89 @@ export default function ListingDetail() {
               </div>
             </div>
 
-            {allItems.length === 0 ? (
+            {sorted.length === 0 ? (
               <div className="empty-state">
                 <div style={{ fontSize: 32 }}>📋</div>
                 <h3>No jobs yet</h3>
                 <p>Sync your iCal to generate cleaning jobs or add maintenance tasks</p>
               </div>
             ) : (
-              <div className="stack">
-                {allItems.map((item) => {
+              <>
+                {/* ── Assigned to me ── */}
+                {myItems.length > 0 && (
+                  <>
+                    <h3 style={{ fontSize: 13, fontWeight: 700, color: '#5b21b6', marginBottom: 8,
+                      display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#7c3aed', display: 'inline-block' }} />
+                      Assigned to me
+                    </h3>
+                    <div className="stack" style={{ marginBottom: 20 }}>
+                      {myItems.map((item) => {
+                        const isDone   = item.status === 'COMPLETED';
+                        const colorSet = isDone ? MY_TASK_COLORS.done : MY_TASK_COLORS.active;
+                        const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'ACTION' ? '✅' : '🔧';
+                        return (
+                          <div key={`my-${item.id}`}
+                            style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
+                              opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
+                                  <span style={{ fontSize: 12 }}>— {item.title}</span>
+                                </div>
+                                <p style={{ fontSize: 12, marginBottom: 2 }}>
+                                  📅 {new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                </p>
+                                {item.paymentAmount && <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>💵 {item.paymentAmount}</p>}
+                                {item.notes && <p style={{ fontSize: 12, marginBottom: 2 }}>{item.notes}</p>}
+                                {item.isRecurring
+                                  ? <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
+                                  : <p style={{ fontSize: 11, marginTop: 2 }}>📌 One-time</p>}
+                                {item.attachments.length > 0 && (
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                                    {item.attachments.map((url, i) => {
+                                      const isPdf = url.toLowerCase().includes('.pdf') || url.includes('/raw/upload/');
+                                      return isPdf ? (
+                                        <a key={i} href={url} target="_blank" rel="noreferrer"
+                                          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                                            background: 'rgba(0,0,0,0.08)', color: colorSet.color, textDecoration: 'none' }}>
+                                          📄 Attachment {i + 1}
+                                        </a>
+                                      ) : (
+                                        <a key={i} href={url} target="_blank" rel="noreferrer">
+                                          <img src={url} alt={`Attachment ${i + 1}`}
+                                            style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', display: 'block' }} />
+                                        </a>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
+                                background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)', color: colorSet.color, marginLeft: 10, flexShrink: 0 }}>
+                                {TASK_STATUS_LABEL[item.status]}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
 
-                  if (item._type === 'cleaning_group') {
+                {/* ── Everything else ── */}
+                {otherItems.length > 0 && (
+                  <>
+                    {myItems.length > 0 && (
+                      <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 8 }}>
+                        All jobs
+                      </h3>
+                    )}
+                    <div className="stack">
+                      {otherItems.map((item) => {
+
+                        if (item._type === 'cleaning_group') {
                     const aggStatus  = groupStatus(item.rooms);
                     const isDone     = aggStatus === 'completed';
                     const colorSet   = isDone ? JOB_COLORS.done : JOB_COLORS.active;
@@ -1050,14 +1135,16 @@ export default function ListingDetail() {
                   const isDone   = item.status === 'COMPLETED';
                   const colorSet = isDone ? MAINT_COLORS.done : MAINT_COLORS.active;
 
+                  const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'ACTION' ? '✅' : '🔧';
+
                   return (
                     <div key={`maint-${item.id}`}
                       style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                         opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 700 }}>🔧 {item.roomName}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
                             <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.title}</span>
                           </div>
                           <p style={{ fontSize: 12, marginBottom: 2 }}>
@@ -1065,12 +1152,44 @@ export default function ListingDetail() {
                               weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
                             })}
                           </p>
+                          {item.paymentAmount && (
+                            <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
+                              💵 {item.paymentAmount}
+                            </p>
+                          )}
                           {item.notes && (
                             <p style={{ fontSize: 12, marginBottom: 2 }}>{item.notes}</p>
                           )}
-                          <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
+                          {item.assignedUser && (
+                            <p style={{ fontSize: 11, marginBottom: 2 }}>👤 {item.assignedUser.name}</p>
+                          )}
+                          {item.isRecurring
+                            ? <p style={{ fontSize: 11, marginTop: 2 }}>🔁 Every {item.intervalMonths}mo</p>
+                            : <p style={{ fontSize: 11, marginTop: 2 }}>📌 One-time</p>
+                          }
+                          {item.attachments.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                              {item.attachments.map((url, i) => {
+                                const isPdf = url.toLowerCase().includes('.pdf') || url.includes('/raw/upload/');
+                                return isPdf ? (
+                                  <a key={i} href={url} target="_blank" rel="noreferrer"
+                                    style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                                      background: 'rgba(0,0,0,0.08)', color: colorSet.color,
+                                      textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    📄 Attachment {i + 1}
+                                  </a>
+                                ) : (
+                                  <a key={i} href={url} target="_blank" rel="noreferrer">
+                                    <img src={url} alt={`Attachment ${i + 1}`}
+                                      style={{ width: 56, height: 56, objectFit: 'cover',
+                                        borderRadius: 6, border: '1px solid rgba(0,0,0,0.1)', display: 'block' }} />
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 10 }}>
                           {!isDone && (
                             <button className="btn btn-secondary btn-sm"
                               style={{ fontSize: 11 }}
@@ -1087,8 +1206,11 @@ export default function ListingDetail() {
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </>
         );
