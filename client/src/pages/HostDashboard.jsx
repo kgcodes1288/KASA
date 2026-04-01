@@ -270,10 +270,14 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
   };
 
   const seg = (active) => ({
-    flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
-    borderRadius: 8, background: active ? 'var(--primary)' : 'var(--bg)',
-    color: active ? '#fff' : 'var(--ink)', cursor: 'pointer', fontSize: 13,
-    fontWeight: active ? 600 : 400, fontFamily: 'var(--font-body)',
+    flex: 1, padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+    fontSize: 13, fontFamily: 'var(--font-body)',
+    fontWeight: active ? 600 : 400,
+    background: active ? 'var(--teal)' : 'var(--bg-card)',
+    color: active ? '#fff' : 'var(--ink)',
+    border: active ? '2px solid var(--teal)' : '2px solid var(--border)',
+    boxShadow: active ? '0 1px 4px rgba(0,137,123,0.25)' : 'none',
+    transition: 'all 0.15s ease',
   });
 
   return (
