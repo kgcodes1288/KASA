@@ -28,27 +28,48 @@ async function getAccess(listingId, userId) {
 // ── Listing-level router (/api/listings/:id/maintenance) ──────────────────────
 const listingRouter = Router({ mergeParams: true });
 
-// GET /api/listings/:id/maintenance — returns rooms with nested checklistItems + maintenanceTasks
+// GET /api/listings/:id/maintenance — returns rooms with nested checklistItems + maintenanceTasks, plus general tasks
 listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
   try {
     const { found } = await getAccess(req.params.id, req.user.id);
     if (!found) return res.status(404).json({ message: 'Listing not found' });
 
-    const rooms = await prisma.room.findMany({
-      where: { listingId: req.params.id },
-      include: {
-        checklistItems: { orderBy: { order: 'asc' } },
-        maintenanceTasks: {
-          include: {
-            assignedUser: { select: { id: true, name: true } },
-            maintenanceTokens: { orderBy: { createdAt: 'desc' }, take: 1 },
+    const taskInclude = {
+      assignedUser: { select: { id: true, name: true } },
+      assignedBy: { select: { id: true, name: true } },
+      maintenanceTokens: { orderBy: { createdAt: 'desc' }, take: 1 },
+    };
+
+    const [rooms, generalTasks] = await Promise.all([
+      prisma.room.findMany({
+        where: { listingId: req.params.id },
+        include: {
+          checklistItems: { orderBy: { order: 'asc' } },
+          maintenanceTasks: {
+            include: taskInclude,
+            orderBy: { nextDueAt: 'asc' },
           },
-          orderBy: { nextDueAt: 'asc' },
         },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    res.json(rooms);
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.maintenanceTask.findMany({
+        where: { listingId: req.params.id, roomId: null },
+        include: taskInclude,
+        orderBy: { nextDueAt: 'asc' },
+      }),
+    ]);
+
+    const result = [...rooms];
+    if (generalTasks.length > 0) {
+      result.push({
+        id: '__general__',
+        name: 'General',
+        entityType: 'GENERAL',
+        checklistItems: [],
+        maintenanceTasks: generalTasks,
+      });
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -61,20 +82,27 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     if (!found) return res.status(404).json({ message: 'Listing not found' });
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
 
-    const { title, notes, intervalMonths, lastServicedAt, nextDueAt, roomId, assignedUserId } = req.body;
-    if (!title || !intervalMonths || !nextDueAt)
-      return res.status(400).json({ message: 'title, intervalMonths and nextDueAt are required' });
+    const { title, notes, intervalMonths, lastServicedAt, nextDueAt, roomId, assignedUserId, taskType, isRecurring } = req.body;
+    if (!title || !nextDueAt)
+      return res.status(400).json({ message: 'title and nextDueAt are required' });
+
+    const recurring = isRecurring !== false;
+    if (recurring && !intervalMonths)
+      return res.status(400).json({ message: 'intervalMonths is required for recurring tasks' });
 
     const task = await prisma.maintenanceTask.create({
       data: {
         title,
         notes: notes || null,
-        intervalMonths: parseInt(intervalMonths),
+        intervalMonths: recurring ? parseInt(intervalMonths) : 0,
+        isRecurring: recurring,
+        taskType: taskType || 'MAINTENANCE',
         lastServicedAt: lastServicedAt ? new Date(lastServicedAt) : null,
         nextDueAt: new Date(nextDueAt),
         listingId: req.params.id,
         roomId: roomId || null,
         assignedUserId: assignedUserId || null,
+        assignedByUserId: req.user.id,
       },
       include: { assignedUser: { select: { id: true, name: true } } },
     });
@@ -97,14 +125,17 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
 
     const now = new Date();
+    const updateData = {
+      status: 'COMPLETED',
+      lastServicedAt: now,
+      notificationSent: false,
+    };
+    if (task.isRecurring && task.intervalMonths > 0) {
+      updateData.nextDueAt = addMonths(now, task.intervalMonths);
+    }
     const updated = await prisma.maintenanceTask.update({
       where: { id: req.params.taskId },
-      data: {
-        status: 'COMPLETED',
-        lastServicedAt: now,
-        nextDueAt: addMonths(now, task.intervalMonths),
-        notificationSent: false,
-      },
+      data: updateData,
       include: { assignedUser: { select: { id: true, name: true } } },
     });
     res.json(updated);

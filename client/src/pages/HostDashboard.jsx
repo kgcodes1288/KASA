@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
 import HowToUseSection from '../components/HowToUseSection';
+import { useAuth } from '../context/AuthContext';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -188,8 +189,234 @@ function ListingModal({ onClose, onSaved, listing }) {
   );
 }
 
+// ── Quick Task Modal ──────────────────────────────────────────────────────────
+function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
+  const [coHosts, setCoHosts]         = useState([]);
+  const [rooms, setRooms]             = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  const [title, setTitle]             = useState('');
+  const [notes, setNotes]             = useState('');
+  const [taskType, setTaskType]       = useState('ACTION');
+  const [assignedTo, setAssignedTo]   = useState('');
+  const [scope, setScope]             = useState('general');
+  const [roomId, setRoomId]           = useState('');
+  const [scheduleType, setScheduleType] = useState('one_time');
+  const [dueDate, setDueDate]         = useState('');
+  const [intervalMonths, setIntervalMonths] = useState(1);
+  const [lastServicedAt, setLastServicedAt] = useState('');
+  const [nextDueAt, setNextDueAt]     = useState('');
+  const [error, setError]             = useState('');
+  const [saving, setSaving]           = useState(false);
+
+  useEffect(() => {
+    if (scheduleType === 'recurring' && lastServicedAt && intervalMonths >= 1) {
+      const d = new Date(lastServicedAt);
+      d.setMonth(d.getMonth() + parseInt(intervalMonths));
+      setNextDueAt(d.toISOString().slice(0, 10));
+    }
+  }, [lastServicedAt, intervalMonths, scheduleType]);
+
+  useEffect(() => {
+    const fetches = [api.get(`/rooms/listing/${listing.id}`)];
+    if (isOwner) fetches.push(api.get(`/listings/${listing.id}/cohosts`));
+    Promise.all(fetches)
+      .then((results) => {
+        setRooms(results[0].data);
+        if (isOwner && results[1]) {
+          setCoHosts(results[1].data.filter((ch) => ch.status === 'ACCEPTED'));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingData(false));
+  }, [listing.id, isOwner]);
+
+  const assigneeOptions = isOwner
+    ? [
+        { value: currentUser.id, label: `Me (${currentUser.name})` },
+        ...coHosts
+          .filter((ch) => ch.userId)
+          .map((ch) => ({ value: ch.userId, label: ch.user?.name || 'Co-host' })),
+      ]
+    : [
+        { value: currentUser.id, label: `Me (${currentUser.name})` },
+        listing.host ? { value: listing.host.id, label: `Host: ${listing.host.name}` } : null,
+      ].filter(Boolean);
+
+  const handleSave = async () => {
+    if (!title.trim()) { setError('Title is required'); return; }
+    const due = scheduleType === 'one_time' ? dueDate : nextDueAt;
+    if (!due) { setError('Due date is required'); return; }
+    if (scope === 'room' && !roomId) { setError('Please select a room'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/listings/${listing.id}/maintenance`, {
+        title: title.trim(),
+        notes: notes.trim() || null,
+        taskType,
+        intervalMonths: scheduleType === 'recurring' ? parseInt(intervalMonths) : 0,
+        isRecurring: scheduleType === 'recurring',
+        lastServicedAt: scheduleType === 'recurring' ? lastServicedAt || null : null,
+        nextDueAt: due,
+        roomId: scope === 'room' ? roomId : null,
+        assignedUserId: assignedTo || null,
+      });
+      onSaved();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const seg = (active) => ({
+    flex: 1, padding: '8px 12px', border: '1px solid var(--border)',
+    borderRadius: 8, background: active ? 'var(--primary)' : 'var(--bg)',
+    color: active ? '#fff' : 'var(--ink)', cursor: 'pointer', fontSize: 13,
+    fontWeight: active ? 600 : 400, fontFamily: 'var(--font-body)',
+  });
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 520 }}>
+        <div className="modal-header">
+          <h3>Add task — {listing.name}</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {loadingData ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+            <div className="spinner" />
+          </div>
+        ) : (
+          <>
+            {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
+
+            {/* Task type */}
+            <div className="form-group">
+              <label>Task type</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={seg(taskType === 'ACTION')} onClick={() => setTaskType('ACTION')}>
+                  ✅ Request Action
+                </button>
+                <button style={seg(taskType === 'PAYMENT_REQUEST')} onClick={() => setTaskType('PAYMENT_REQUEST')}>
+                  💰 Request Payment
+                </button>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="form-group">
+              <label>Title</label>
+              <input
+                className="input"
+                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Cleaning fee reimbursement' : 'e.g. Fix the broken lock'}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="form-group">
+              <label>Notes <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+              <textarea className="input" rows={2} placeholder="Any extra details…"
+                value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
+            </div>
+
+            {/* Assigned to */}
+            {assigneeOptions.length > 0 && (
+              <div className="form-group">
+                <label>Assigned to</label>
+                <select className="input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+                  <option value="">Unassigned</option>
+                  {assigneeOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Scope */}
+            <div className="form-group">
+              <label>Applies to</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={seg(scope === 'general')} onClick={() => { setScope('general'); setRoomId(''); }}>
+                  🏠 General (entire property)
+                </button>
+                <button style={seg(scope === 'room')} onClick={() => setScope('room')}>
+                  🛏 Specific room
+                </button>
+              </div>
+              {scope === 'room' && (
+                <select className="input" style={{ marginTop: 10 }} value={roomId} onChange={(e) => setRoomId(e.target.value)}>
+                  <option value="">Choose a room…</option>
+                  {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              )}
+            </div>
+
+            {/* Schedule */}
+            <div className="form-group">
+              <label>Schedule</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={seg(scheduleType === 'one_time')} onClick={() => setScheduleType('one_time')}>
+                  📅 One-time
+                </button>
+                <button style={seg(scheduleType === 'recurring')} onClick={() => setScheduleType('recurring')}>
+                  🔁 Recurring
+                </button>
+              </div>
+            </div>
+
+            {scheduleType === 'one_time' && (
+              <div className="form-group">
+                <label>Due date</label>
+                <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              </div>
+            )}
+
+            {scheduleType === 'recurring' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="form-group">
+                    <label>Interval (months)</label>
+                    <input className="input" type="number" min={1} value={intervalMonths}
+                      onChange={(e) => setIntervalMonths(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label>Last serviced <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+                    <input className="input" type="date" value={lastServicedAt}
+                      onChange={(e) => setLastServicedAt(e.target.value)} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label>Next due date</label>
+                  <input className="input" type="date" value={nextDueAt}
+                    onChange={(e) => setNextDueAt(e.target.value)} />
+                  {lastServicedAt && (
+                    <p style={{ fontSize: 12, marginTop: 4, color: 'var(--ink-ghost)' }}>
+                      Auto-calculated from last serviced + interval
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? 'Saving…' : 'Add task'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Listing Card ─────────────────────────────────────────────────────────────
-function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
+function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, onAddTask, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
 
@@ -218,6 +445,9 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
         </Link>
         {canEdit && (
           <>
+            <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
+              + Add task
+            </button>
             <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
               {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
             </button>
@@ -276,6 +506,7 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
 
 // ── Host Dashboard ───────────────────────────────────────────────────────────
 export default function HostDashboard() {
+  const { user: currentUser } = useAuth();
   const [listings, setListings] = useState([]);
   const [coHostedListings, setCoHostedListings] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -285,6 +516,7 @@ export default function HostDashboard() {
   const [syncing, setSyncing] = useState({});
   const [syncErrors, setSyncErrors] = useState({});
   const [expandedCalendars, setExpandedCalendars] = useState({});
+  const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
 
   const load = () => {
     setLoading(true);
@@ -376,6 +608,7 @@ const handleSync = async (id) => {
                     onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
                     onDelete={handleDelete}
                     onSync={handleSync}
+                    onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: true })}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
@@ -403,6 +636,7 @@ const handleSync = async (id) => {
                     onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
                     onDelete={handleDelete}
                     onSync={handleSync}
+                    onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: false })}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
@@ -420,6 +654,15 @@ const handleSync = async (id) => {
           listing={editTarget}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
+        />
+      )}
+      {quickTaskModal && currentUser && (
+        <QuickTaskModal
+          listing={quickTaskModal.listing}
+          isOwner={quickTaskModal.isOwner}
+          currentUser={currentUser}
+          onClose={() => setQuickTaskModal(null)}
+          onSaved={() => setQuickTaskModal(null)}
         />
       )}
     </div>

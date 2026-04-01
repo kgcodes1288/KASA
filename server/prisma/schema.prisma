@@ -21,6 +21,7 @@ model User {
   jobs                  Job[]
   coHosting             ListingCoHost[] @relation("CoHostUser")
   maintenanceTasks      MaintenanceTask[]
+  assignedByTasks       MaintenanceTask[] @relation("TaskAssignedBy")
   contractors           Contractor[]
 }
 
@@ -98,6 +99,8 @@ model MaintenanceTask {
   title            String
   notes            String?
   intervalMonths   Int
+  isRecurring      Boolean    @default(true)
+  taskType         TaskType   @default(MAINTENANCE)
   lastServicedAt   DateTime?
   nextDueAt        DateTime
   status           TaskStatus @default(PENDING)
@@ -107,10 +110,12 @@ model MaintenanceTask {
   listingId        String
   roomId           String?
   assignedUserId   String?
+  assignedByUserId String?
 
   listing            Listing              @relation(fields: [listingId], references: [id], onDelete: Cascade)
   room               Room?                @relation(fields: [roomId], references: [id], onDelete: SetNull)
   assignedUser       User?                @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedBy         User?                @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
   maintenanceTokens  MaintenanceToken[]
 }
 
@@ -118,6 +123,12 @@ enum TaskStatus {
   PENDING
   COMPLETED
   OVERDUE
+}
+
+enum TaskType {
+  MAINTENANCE
+  ACTION
+  PAYMENT_REQUEST
 }
 
 // ── New: contractor token for maintenance tasks ──────────────────────────────
