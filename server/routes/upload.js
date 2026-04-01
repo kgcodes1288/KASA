@@ -2,6 +2,7 @@ const { Router } = require('express');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const authenticate = require('../middleware/auth');
+const crypto = require('crypto');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -28,13 +29,18 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   try {
     const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
 
+    const originalName = req.file.originalname;
+    const ext = originalName.match(/\.[^/.]+$/)?.[0] || '';
+    const baseName = originalName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const uniqueSuffix = crypto.randomBytes(4).toString('hex');
+    const publicId = `${baseName}_${uniqueSuffix}${ext}`;
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: 'kasa-workplanner/tasks',
           resource_type: resourceType,
-          use_filename: true,
-          unique_filename: true,
+          public_id: publicId,
         },
         (err, result) => (err ? reject(err) : resolve(result))
       );
