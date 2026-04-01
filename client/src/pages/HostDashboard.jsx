@@ -315,7 +315,7 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 520 }}>
+      <div className="modal" style={{ maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header">
           <h3>Add task — {listing.name}</h3>
           <button className="btn-icon" onClick={onClose}>✕</button>
