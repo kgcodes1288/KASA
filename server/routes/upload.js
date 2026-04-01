@@ -26,9 +26,11 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
   try {
+    const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
+
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'kasa-workplanner/tasks', resource_type: 'auto' },
+        { folder: 'kasa-workplanner/tasks', resource_type: resourceType },
         (err, result) => (err ? reject(err) : resolve(result))
       );
       stream.end(req.file.buffer);
