@@ -827,6 +827,7 @@ export default function ListingDetail() {
             paymentAmount: t.paymentAmount || null,
             attachments: t.attachments || [],
             assignedUser: t.assignedUser || null,
+            assignedBy: t.assignedBy || null,
           }))
         );
 
@@ -870,8 +871,12 @@ export default function ListingDetail() {
         const sorted = [...cleaningGroups, ...maintItems].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
-        const myItems    = sorted.filter((i) => i._type === 'maintenance' && i.assignedUser?.id === currentUser?.id);
-        const otherItems = sorted.filter((i) => !(i._type === 'maintenance' && i.assignedUser?.id === currentUser?.id));
+        const isMyTask = (i) => i._type === 'maintenance' && (
+          i.assignedUser?.id === currentUser?.id ||
+          (!i.assignedUser && i.assignedBy?.id === currentUser?.id)
+        );
+        const myItems    = sorted.filter(isMyTask);
+        const otherItems = sorted.filter((i) => !isMyTask(i));
 
         const JOB_COLORS = {
           active: { background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af' },
@@ -967,6 +972,13 @@ export default function ListingDetail() {
                                     style={{ fontSize: 11 }}
                                     onClick={() => handleCompleteTask(item.id)}>
                                     ✅ Mark complete
+                                  </button>
+                                )}
+                                {item.assignedBy?.id === currentUser?.id && (
+                                  <button className="btn btn-danger btn-sm"
+                                    style={{ fontSize: 11 }}
+                                    onClick={() => handleDeleteTask(item.id)}>
+                                    🗑
                                   </button>
                                 )}
                                 <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
@@ -1217,6 +1229,13 @@ export default function ListingDetail() {
                                 ✅ Mark complete
                               </button>
                             </>
+                          )}
+                          {item.assignedBy?.id === currentUser?.id && (
+                            <button className="btn btn-danger btn-sm"
+                              style={{ fontSize: 11 }}
+                              onClick={() => handleDeleteTask(item.id)}>
+                              🗑
+                            </button>
                           )}
                           <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
                             fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
