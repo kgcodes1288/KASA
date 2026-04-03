@@ -225,11 +225,10 @@ taskRouter.delete('/:taskId', authenticate, async (req, res) => {
     if (task.attachments && task.attachments.length > 0) {
       await Promise.allSettled(task.attachments.map((url) => {
         // Extract public_id from URL: everything after /upload/vXXXX/ (strip version)
-        const match = url.match(/\/(?:image|raw)\/upload\/(?:v\d+\/)?(.+)$/);
+        const match = url.match(/\/image\/upload\/(?:v\d+\/)?(.+)$/);
         if (!match) return Promise.resolve();
-        const publicId = match[1].replace(/\.[^/.]+$/, ''); // strip extension for images
-        const resourceType = url.includes('/raw/upload/') ? 'raw' : 'image';
-        return cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+        const publicId = match[1].replace(/\.[^/.]+$/, ''); // strip extension
+        return cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
       }));
     }
 

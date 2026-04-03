@@ -27,8 +27,6 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
   try {
-    const resourceType = req.file.mimetype === 'application/pdf' ? 'raw' : 'image';
-
     const originalName = req.file.originalname;
     const ext = originalName.match(/\.[^/.]+$/)?.[0] || '';
     const baseName = originalName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -39,9 +37,8 @@ router.post('/', authenticate, upload.single('file'), async (req, res) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: 'kasa-workplanner/tasks',
-          resource_type: resourceType,
+          resource_type: 'image',
           public_id: publicId,
-          access_mode: 'public',
         },
         (err, result) => (err ? reject(err) : resolve(result))
       );
