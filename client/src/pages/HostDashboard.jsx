@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api';
 import HowToUseSection from '../components/HowToUseSection';
 import { useAuth } from '../context/AuthContext';
+import AccountCalendar from './AccountCalendar';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -596,6 +597,7 @@ export default function HostDashboard() {
   const [syncErrors, setSyncErrors] = useState({});
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
+  const [activeTab, setActiveTab] = useState('properties');
 
   const load = () => {
     setLoading(true);
@@ -645,15 +647,44 @@ const handleSync = async (id) => {
     <div className="page">
       <div className="section-header">
         <div>
-          <h1>My Listings</h1>
-          <p>Manage your Airbnb properties and cleaning rooms</p>
+          <h1>Account Dashboard</h1>
+          <p>Manage your properties and view your calendar</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditTarget(null); setShowModal(true); }}>
-          + New listing
-        </button>
+        {activeTab === 'properties' && (
+          <button className="btn btn-primary" onClick={() => { setEditTarget(null); setShowModal(true); }}>
+            + New listing
+          </button>
+        )}
       </div>
 
-      {loading ? (
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 28 }}>
+        {[['properties', 'My Properties'], ['calendar', 'Calendar']].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setActiveTab(id)}
+            style={{
+              padding: '10px 20px',
+              border: 'none',
+              borderBottom: activeTab === id ? '2px solid var(--teal)' : '2px solid transparent',
+              background: 'transparent',
+              color: activeTab === id ? 'var(--teal)' : 'var(--ink-soft)',
+              fontWeight: activeTab === id ? 600 : 400,
+              fontSize: 14,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+              marginBottom: -1,
+              transition: 'color 0.15s ease',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'calendar' ? (
+        <AccountCalendar />
+      ) : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
           <div className="spinner" />
         </div>
