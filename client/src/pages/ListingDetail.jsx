@@ -974,6 +974,13 @@ export default function ListingDetail() {
                                     ✅ Mark complete
                                   </button>
                                 )}
+                                {!isDone && (
+                                  <button className="btn btn-secondary btn-sm"
+                                    style={{ fontSize: 11 }}
+                                    onClick={() => setAssignMaintenanceModal(item)}>
+                                    ↗ Reassign
+                                  </button>
+                                )}
                                 {item.assignedBy?.id === currentUser?.id && (
                                   <button className="btn btn-danger btn-sm"
                                     style={{ fontSize: 11 }}
@@ -1284,7 +1291,7 @@ export default function ListingDetail() {
           listingId={id}
           coHosts={coHosts}
           contractors={contractors}
-          onClose={() => setAssignMaintenanceModal(null)}
+          onClose={() => { setAssignMaintenanceModal(null); loadMaintenance(); }}
         />
       )}
     </div>

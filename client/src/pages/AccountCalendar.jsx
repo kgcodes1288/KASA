@@ -29,6 +29,7 @@ export default function AccountCalendar() {
   const [filterMode, setFilterMode] = useState('property');
   const [selectedProperty, setSelectedProperty] = useState('');
   const [selectedContractor, setSelectedContractor] = useState('');
+  const [selfPropertyFilter, setSelfPropertyFilter] = useState('');
   const [currentMonth, setCurrentMonth] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1)
   );
@@ -59,14 +60,23 @@ export default function AccountCalendar() {
   // Active selection
   const selectedId = filterMode === 'property' ? selectedProperty : selectedContractor;
 
+  // Show calendar even without a selection in "myself" mode
+  const showCalendar = filterMode === 'myself' || !!selectedId;
+
   // Filter events to what's relevant for the current selection
-  const filteredEvents = selectedId
-    ? events.filter((e) =>
-        filterMode === 'property'
-          ? e.listingId === selectedId
-          : e.type === 'contractor_job' && e.contractorName === selectedId
-      )
-    : [];
+  const filteredEvents = (() => {
+    if (filterMode === 'property' && selectedProperty) {
+      return events.filter((e) => e.listingId === selectedProperty && e.type !== 'maintenance_task');
+    }
+    if (filterMode === 'contractor' && selectedContractor) {
+      return events.filter((e) => e.type === 'contractor_job' && e.contractorName === selectedContractor);
+    }
+    if (filterMode === 'myself') {
+      const myTasks = events.filter((e) => e.type === 'maintenance_task');
+      return selfPropertyFilter ? myTasks.filter((e) => e.listingId === selfPropertyFilter) : myTasks;
+    }
+    return [];
+  })();
 
   // Calendar math
   const year = currentMonth.getFullYear();
@@ -92,7 +102,7 @@ export default function AccountCalendar() {
         const checkout = toLocal(evt.checkoutDate);
         if (d >= checkin && d < checkout) isStay = true;
         if (dTime === checkout.getTime()) isCheckout = true;
-      } else if (evt.type === 'contractor_job') {
+      } else if (evt.type === 'contractor_job' || evt.type === 'maintenance_task') {
         if (toLocal(evt.date).getTime() === dTime) chips.push(evt);
       }
     }
@@ -157,6 +167,9 @@ export default function AccountCalendar() {
           <button style={seg(filterMode === 'contractor')} onClick={() => setFilterMode('contractor')}>
             Contractor
           </button>
+          <button style={seg(filterMode === 'myself')} onClick={() => setFilterMode('myself')}>
+            Myself
+          </button>
         </div>
 
         {filterMode === 'property' ? (
@@ -170,7 +183,7 @@ export default function AccountCalendar() {
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
-        ) : (
+        ) : filterMode === 'contractor' ? (
           <select
             value={selectedContractor}
             onChange={(e) => setSelectedContractor(e.target.value)}
@@ -179,6 +192,17 @@ export default function AccountCalendar() {
             <option value="">Select a contractor…</option>
             {contractorNames.map((name) => (
               <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        ) : (
+          <select
+            value={selfPropertyFilter}
+            onChange={(e) => setSelfPropertyFilter(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">All properties</option>
+            {listings.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
         )}
@@ -237,7 +261,7 @@ export default function AccountCalendar() {
         </div>
 
         {/* Grid body */}
-        {!selectedId ? (
+        {!showCalendar ? (
           <div style={{
             padding: '48px 24px',
             textAlign: 'center',
@@ -306,12 +330,18 @@ export default function AccountCalendar() {
                   {/* Event chips */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {chips.map((chip, ci) => {
-                      const color = filterMode === 'contractor'
-                        ? (listingColor[chip.listingId] || PALETTE[0])
-                        : CONTRACTOR_COLOR;
-                      const label = filterMode === 'contractor'
-                        ? chip.listingName
-                        : chip.contractorName;
+                      let color, label;
+                      if (filterMode === 'myself') {
+                        color = listingColor[chip.listingId] || PALETTE[0];
+                        const icon = chip.taskType === 'PAYMENT_REQUEST' ? '💰' : chip.taskType === 'ACTION' ? '✅' : '🔧';
+                        label = selfPropertyFilter ? `${icon} ${chip.title}` : `${icon} ${chip.listingName}`;
+                      } else if (filterMode === 'contractor') {
+                        color = listingColor[chip.listingId] || PALETTE[0];
+                        label = chip.listingName;
+                      } else {
+                        color = CONTRACTOR_COLOR;
+                        label = chip.contractorName;
+                      }
                       return (
                         <div key={ci} style={{
                           fontSize: 10,
@@ -353,9 +383,24 @@ export default function AccountCalendar() {
       </div>
 
       {/* ── Legend ── */}
-      {selectedId && (
+      {showCalendar && (
         <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12, color: 'var(--ink-ghost)', flexWrap: 'wrap', alignItems: 'center' }}>
-          {filterMode === 'property' ? (
+          {filterMode === 'myself' ? (
+            activeListingIds.length === 0 ? (
+              <span>No tasks assigned to you this month</span>
+            ) : (
+              activeListingIds.map((lid) => {
+                const listing = listings.find((l) => l.id === lid);
+                const c = listingColor[lid] || PALETTE[0];
+                return (
+                  <span key={lid} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: c.bg, border: `1px solid ${c.border}`, display: 'inline-block' }} />
+                    {listing?.name}
+                  </span>
+                );
+              })
+            )
+          ) : filterMode === 'property' ? (
             <>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: '#fee2e2', border: '1px solid #fca5a5', display: 'inline-block' }} />
