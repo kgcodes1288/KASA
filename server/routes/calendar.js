@@ -30,7 +30,7 @@ router.get('/', auth, async (req, res) => {
       return res.json({ listings: [], contractorNames: [], events: [] });
     }
 
-    const [jobs, tokens, contractors] = await Promise.all([
+    const [jobs, tokens, contractors, myTasks] = await Promise.all([
       prisma.job.findMany({
         where: { listingId: { in: listingIds } },
         include: { cleaner: { select: { id: true, name: true, phone: true } } },
@@ -51,6 +51,14 @@ router.get('/', auth, async (req, res) => {
         where: { hostId: req.user.id },
         select: { id: true, name: true, phone: true, trade: true },
         orderBy: { name: 'asc' },
+      }),
+      prisma.maintenanceTask.findMany({
+        where: { listingId: { in: listingIds }, assignedUserId: req.user.id },
+        select: {
+          id: true, title: true, nextDueAt: true,
+          status: true, taskType: true, listingId: true,
+        },
+        orderBy: { nextDueAt: 'asc' },
       }),
     ]);
 
@@ -112,6 +120,20 @@ router.get('/', auth, async (req, res) => {
           status: token.status,
         });
       }
+    }
+
+    // Tasks assigned to the current user
+    for (const task of myTasks) {
+      const listingName = allListings.find((l) => l.id === task.listingId)?.name;
+      events.push({
+        type: 'maintenance_task',
+        listingId: task.listingId,
+        listingName,
+        date: task.nextDueAt,
+        title: task.title,
+        status: task.status,
+        taskType: task.taskType,
+      });
     }
 
     // Unique contractor names from all sources
