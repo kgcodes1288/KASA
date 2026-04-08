@@ -113,17 +113,35 @@ router.get('/:id/cohosts', authenticate2, async (req, res) => {
   const { id: listingId } = req.params;
 
   const listingRole = await getListingRole(listingId, req.user.id);
-  if (listingRole !== 'OWNER') {
-    return res.status(403).json({ error: 'Only the listing owner can view co-hosts.' });
+  if (!listingRole) {
+    return res.status(403).json({ error: 'Access denied.' });
   }
+
+  const listing = await prisma.listing.findUnique({
+    where: { id: listingId },
+    include: { host: { select: { id: true, name: true, phone: true, email: true } } },
+  });
 
   const coHosts = await prisma.listingCoHost.findMany({
     where: { listingId },
-    include: { user: { select: { id: true, name: true, phone: true } } },
+    include: { user: { select: { id: true, name: true, phone: true, email: true } } },
     orderBy: { createdAt: 'asc' },
   });
 
-  res.json(coHosts);
+  // Attach listing owner as a virtual entry so co-hosts can assign tasks to the owner
+  const ownerEntry = {
+    id: `owner-${listing.host.id}`,
+    listingId,
+    userId: listing.host.id,
+    role: 'OWNER',
+    status: 'ACCEPTED',
+    isOwner: true,
+    user: listing.host,
+    invitePhone: null,
+  };
+
+  // Owner-only management fields (invite/withdraw) stay; assignable list includes owner
+  res.json([ownerEntry, ...coHosts]);
 });
 
 // GET /api/cohosts/my-listings

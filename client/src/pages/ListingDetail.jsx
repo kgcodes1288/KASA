@@ -325,7 +325,7 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
 }
 
 /* ── Assign Maintenance Task modal ── */
-function AssignMaintenanceModal({ task, listingId, coHosts, contractors, onClose }) {
+function AssignMaintenanceModal({ task, listingId, coHosts, contractors, currentUserId, onClose }) {
   const [assignType, setAssignType]   = useState('contractor');
   const [userId, setUserId]           = useState('');
   const [phone, setPhone]             = useState('');
@@ -417,17 +417,21 @@ function AssignMaintenanceModal({ task, listingId, coHosts, contractors, onClose
 
             {assignType === 'cohost' && (
               <div className="form-group">
-                <label>Select co-host</label>
-                {coHosts.length === 0 ? (
+                <label>Assign to</label>
+                {coHosts.filter((ch) => ch.userId && ch.userId !== currentUserId && ch.status === 'ACCEPTED').length === 0 ? (
                   <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
-                    No accepted co-hosts on this listing yet.
+                    No other members on this listing yet.
                   </p>
                 ) : (
                   <select className="input" value={userId} onChange={(e) => setUserId(e.target.value)}>
-                    <option value="">Choose a co-host…</option>
-                    {coHosts.map((ch) => (
-                      <option key={ch.userId} value={ch.userId}>{ch.user?.name} ({ch.user?.email})</option>
-                    ))}
+                    <option value="">Choose a person…</option>
+                    {coHosts
+                      .filter((ch) => ch.userId && ch.userId !== currentUserId && ch.status === 'ACCEPTED')
+                      .map((ch) => (
+                        <option key={ch.userId} value={ch.userId}>
+                          {ch.isOwner ? '👑 ' : ''}{ch.user?.name}{ch.user?.email ? ` (${ch.user.email})` : ''}
+                        </option>
+                      ))}
                   </select>
                 )}
               </div>
@@ -1291,6 +1295,7 @@ export default function ListingDetail() {
           listingId={id}
           coHosts={coHosts}
           contractors={contractors}
+          currentUserId={currentUser?.id}
           onClose={() => { setAssignMaintenanceModal(null); loadMaintenance(); }}
         />
       )}

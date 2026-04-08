@@ -425,7 +425,7 @@ function CoHostSection() {
       const withCoHosts = await Promise.all(
         lRes.data.map(async (l) => {
           const chRes = await api.get(`/listings/${l.id}/cohosts`);
-          return { ...l, coHosts: chRes.data };
+          return { ...l, coHosts: chRes.data.filter((ch) => !ch.isOwner) };
         })
       );
       setMyListings(withCoHosts);
