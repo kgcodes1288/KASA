@@ -3,6 +3,17 @@ const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { syncListing } = require('../services/icalPoller');
 
+// Helper: check if user is owner or accepted co-host of a listing
+async function hasAccess(listingId, userId) {
+  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!listing) return { listing: null, ok: false, isOwner: false };
+  if (listing.hostId === userId) return { listing, ok: true, isOwner: true };
+  const coHost = await prisma.listingCoHost.findFirst({
+    where: { listingId, userId, status: 'ACCEPTED' },
+  });
+  return { listing, ok: !!coHost, isOwner: false };
+}
+
 // POST /api/listings
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host')
@@ -20,11 +31,22 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/listings
+// GET /api/listings — returns owned + co-hosted listings
 router.get('/', auth, async (req, res) => {
   try {
+    const coHosted = await prisma.listingCoHost.findMany({
+      where: { userId: req.user.id, status: 'ACCEPTED' },
+      select: { listingId: true },
+    });
+    const coHostedIds = coHosted.map((c) => c.listingId);
+
     const listings = await prisma.listing.findMany({
-      where: { hostId: req.user.id },
+      where: {
+        OR: [
+          { hostId: req.user.id },
+          { id: { in: coHostedIds } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
     });
     res.json(listings);
@@ -46,22 +68,25 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// PUT /api/listings/:id
+// PUT /api/listings/:id — owner or co-host can edit
 router.put('/:id', auth, async (req, res) => {
   try {
+    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    if (!listing) return res.status(404).json({ message: 'Listing not found' });
+    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+
     const { name, address, icalUrl } = req.body;
-    const listing = await prisma.listing.update({
-      where: { id: req.params.id, hostId: req.user.id },
+    const updated = await prisma.listing.update({
+      where: { id: req.params.id },
       data: { name, address, icalUrl },
     });
-    res.json(listing);
+    res.json(updated);
   } catch (err) {
-    if (err.code === 'P2025') return res.status(404).json({ message: 'Not found or not authorized' });
     res.status(500).json({ message: err.message });
   }
 });
 
-// DELETE /api/listings/:id
+// DELETE /api/listings/:id — owner only
 router.delete('/:id', auth, async (req, res) => {
   try {
     await prisma.listing.delete({ where: { id: req.params.id, hostId: req.user.id } });
@@ -72,22 +97,17 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/sync
+// POST /api/listings/:id/sync — owner or co-host can sync
 router.post('/:id/sync', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const listing = await prisma.listing.findFirst({
-      where: { id: req.params.id, hostId: req.user.id },
-    });
+    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
     if (!listing) return res.status(404).json({ message: 'Not found' });
+    if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
     await syncListing(listing);
 
-    // Re-fetch to get the updated lastSynced written by syncListing
-    const updated = await prisma.listing.findUnique({
-      where: { id: req.params.id },
-    });
-
+    const updated = await prisma.listing.findUnique({ where: { id: req.params.id } });
     res.json({ message: 'Sync complete', lastSynced: updated.lastSynced });
   } catch (err) {
     console.error('[sync route] error:', err.message);
