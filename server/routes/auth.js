@@ -9,7 +9,13 @@ const signToken = (id) =>
 
 const safeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone });
 
-const normalizePhone = (phone) => phone ? phone.replace(/\s+/g, '').trim() : null;
+// Strip to 10 digits (removes +1 country code)
+const normalizePhone = (phone) => {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  return digits;
+};
 
 
 // POST /api/auth/register
@@ -28,18 +34,17 @@ router.post('/register', async (req, res) => {
       data: { name, email, password: hashed, role, phone: normalizePhone(phone) || null },
     });
 
-// Auto-link any pending co-host invites matching this phone number
-// Status stays PENDING — user accepts/declines from Account page
+// Auto-link any pending co-host invites matching this phone number.
+// Check both 10-digit and +1 formats to catch records stored either way.
 if (phone) {
+  const phone10 = normalizePhone(phone);
   await prisma.listingCoHost.updateMany({
     where: {
-      invitePhone: normalizePhone(phone),
+      invitePhone: { in: [phone10, `+1${phone10}`] },
       status: 'PENDING',
       userId: null,
     },
-    data: {
-      userId: user.id,
-    },
+    data: { userId: user.id },
   });
 }
 

@@ -12,7 +12,14 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-const normalizePhone = (phone) => phone ? phone.replace(/\s+/g, '').trim() : null;
+// Strip to 10 digits (removes +1 country code). Use toE164() for Twilio calls.
+const normalizePhone = (phone) => {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+  return digits;
+};
+const toE164 = (phone) => `+1${normalizePhone(phone)}`;
 
 // Helper — check what role a user has on a listing
 async function getListingRole(listingId, userId) {
@@ -93,7 +100,7 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   await twilioClient.messages.create({
     body: `CleanStay: ${req.user.name} has invited you to co-host "${listing.name}" as ${roleLabel}. Tap to join: ${link}. Reply STOP to opt out.`,
     from: process.env.TWILIO_PHONE,
-    to: phone,
+    to: toE164(phone),
   });
 
   res.status(201).json({ message: 'Invite sent via SMS.', coHost });
@@ -140,14 +147,18 @@ router.get('/my-listings', authenticate2, async (req, res) => {
 
 // GET /api/cohosts/pending
 router.get('/pending', authenticate2, async (req, res) => {
-  const phone = req.user.phone ? normalizePhone(req.user.phone) : null;
+  const phone10 = req.user.phone ? normalizePhone(req.user.phone) : null;
+  // Check both 10-digit and +1 formats to match records created before normalization was consistent
+  const phoneVariants = phone10
+    ? [phone10, `+1${phone10}`].filter(Boolean)
+    : [];
 
   // Match by userId OR by invitePhone (handles sign-ups where userId wasn't linked yet)
   const whereClause = {
     status: 'PENDING',
     OR: [
       { userId: req.user.id },
-      ...(phone ? [{ invitePhone: phone, userId: null }] : []),
+      ...(phoneVariants.length ? [{ invitePhone: { in: phoneVariants }, userId: null }] : []),
     ],
   };
 
