@@ -140,13 +140,33 @@ router.get('/my-listings', authenticate2, async (req, res) => {
 
 // GET /api/cohosts/pending
 router.get('/pending', authenticate2, async (req, res) => {
+  const phone = req.user.phone ? normalizePhone(req.user.phone) : null;
+
+  // Match by userId OR by invitePhone (handles sign-ups where userId wasn't linked yet)
+  const whereClause = {
+    status: 'PENDING',
+    OR: [
+      { userId: req.user.id },
+      ...(phone ? [{ invitePhone: phone, userId: null }] : []),
+    ],
+  };
+
   const pending = await prisma.listingCoHost.findMany({
-    where: { userId: req.user.id, status: 'PENDING' },
+    where: whereClause,
     include: {
       listing: { select: { id: true, name: true } },
       user: { select: { id: true, name: true } },
     },
   });
+
+  // Auto-link any invites found by phone that don't have a userId yet
+  const unlinked = pending.filter((p) => !p.userId);
+  if (unlinked.length > 0) {
+    await prisma.listingCoHost.updateMany({
+      where: { id: { in: unlinked.map((p) => p.id) } },
+      data: { userId: req.user.id },
+    });
+  }
 
   const withHost = await Promise.all(
     pending.map(async (p) => {
