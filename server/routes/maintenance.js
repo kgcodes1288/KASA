@@ -114,8 +114,23 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         assignedUserId: assignedUserId || null,
         assignedByUserId: req.user.id,
       },
-      include: { assignedUser: { select: { id: true, name: true } } },
+      include: {
+        assignedUser: { select: { id: true, name: true } },
+        listing: { select: { name: true } },
+      },
     });
+
+    // Notify assigned user if different from creator
+    if (assignedUserId && assignedUserId !== req.user.id) {
+      await notify(
+        assignedUserId,
+        'TASK_ASSIGNED',
+        'Task assigned to you',
+        `You've been assigned "${title}" at ${task.listing.name}`,
+        req.params.id
+      );
+    }
+
     res.status(201).json(task);
   } catch (err) {
     res.status(500).json({ message: err.message });
