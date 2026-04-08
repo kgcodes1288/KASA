@@ -120,6 +120,39 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 .checklist-item .item-text { flex: 1; font-size: 14px; }
 .checklist-item.done .item-text { text-decoration: line-through; color: var(--ink-ghost); }
 
+/* ── Notification badge animations ── */
+@keyframes notif-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.35); opacity: 1; }
+  80%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+@keyframes notif-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+  70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+.notif-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border: 2px solid var(--bg-card);
+  animation: notif-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both,
+             notif-ring 1.2s ease-out 0.4s 2;
+  pointer-events: none;
+}
+
 /* ── Navbar ── */
 .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border); height: 58px; display: flex; align-items: center; position: sticky; top: 0; z-index: 50; }
 .navbar-inner { max-width: 1080px; margin: 0 auto; padding: 0 20px; width: 100%; display: flex; align-items: center; gap: 14px; }
