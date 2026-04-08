@@ -1,6 +1,7 @@
 const ical = require('node-ical');
 const cron = require('node-cron');
 const prisma = require('../lib/prisma');
+const { notifyListingMembers } = require('../lib/notify');
 
 async function syncListing(listing) {
   try {
@@ -45,6 +46,15 @@ async function syncListing(listing) {
             },
           },
         });
+
+        const dateStr = checkoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        await notifyListingMembers(
+          listing.id,
+          'JOB_CREATED',
+          'New cleaning job',
+          `New cleaning job added for ${listing.name} — checkout ${dateStr}`
+        );
+
         console.log(`[iCal] Created job for room "${room.name}" — checkout ${checkoutDate}`);
       }
     }
