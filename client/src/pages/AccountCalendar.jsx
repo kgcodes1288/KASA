@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../api';
 
 const PALETTE = [
@@ -343,20 +344,27 @@ export default function AccountCalendar() {
                         label = chip.contractorName;
                       }
                       return (
-                        <div key={ci} style={{
-                          fontSize: 10,
-                          padding: '2px 5px',
-                          borderRadius: 4,
-                          background: color.bg,
-                          color: color.text,
-                          border: `1px solid ${color.border}`,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          fontWeight: 500,
-                        }}>
+                        <Link
+                          key={ci}
+                          to={`/listings/${chip.listingId}?tab=jobs`}
+                          style={{
+                            display: 'block',
+                            fontSize: 10,
+                            padding: '2px 5px',
+                            borderRadius: 4,
+                            background: color.bg,
+                            color: color.text,
+                            border: `1px solid ${color.border}`,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            fontWeight: 500,
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
                           {label}
-                        </div>
+                        </Link>
                       );
                     })}
 

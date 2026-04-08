@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -507,7 +507,8 @@ export default function ListingDetail() {
   const [expanded, setExpanded]           = useState({});
   const [expandedRooms, setExpandedRooms] = useState({});
   const [togglingItem, setTogglingItem]   = useState(null);
-  const [tab, setTab]                     = useState('spaces');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab]                     = useState(searchParams.get('tab') === 'jobs' ? 'jobs' : 'spaces');
 
   const [coHosts, setCoHosts]                     = useState([]);
   const [assignMaintenanceModal, setAssignMaintenanceModal] = useState(null);
