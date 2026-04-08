@@ -594,8 +594,12 @@ export default function ListingDetail() {
 
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task?')) return;
-    await api.delete(`/maintenance/${taskId}`);
-    loadMaintenance();
+    try {
+      await api.delete(`/maintenance/${taskId}`);
+      loadMaintenance();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete task');
+    }
   };
 
   const handleCompleteTask = async (taskId) => {
@@ -638,6 +642,12 @@ export default function ListingDetail() {
 
   const toggleRoom = (jobId) =>
     setExpandedRooms((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
+
+  // true for both the listing owner and any accepted co-host
+  const canManageTasks = listing
+    ? listing.hostId === currentUser?.id ||
+      coHosts.some((ch) => ch.userId === currentUser?.id && ch.status === 'ACCEPTED')
+    : false;
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
@@ -985,7 +995,7 @@ export default function ListingDetail() {
                                     ↗ Reassign
                                   </button>
                                 )}
-                                {item.assignedBy?.id === currentUser?.id && (
+                                {canManageTasks && (
                                   <button className="btn btn-danger btn-sm"
                                     style={{ fontSize: 11 }}
                                     onClick={() => handleDeleteTask(item.id)}>
