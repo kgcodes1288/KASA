@@ -35,6 +35,7 @@ export default function Navbar() {
               to="/account"
               className="badge"
               style={{
+                position: 'relative',
                 background: 'var(--bg)',
                 border: '1.5px solid var(--border)',
                 fontSize: 13,
@@ -47,19 +48,7 @@ export default function Navbar() {
             >
               👤 {user.name}
               {unreadCount > 0 && (
-                <span style={{
-                  background: '#ef4444',
-                  color: '#fff',
-                  borderRadius: '50%',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  minWidth: 18,
-                  height: 18,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '0 4px',
-                }}>
+                <span key={unreadCount} className="notif-badge">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
