@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const prisma = require('../lib/prisma');
 const authenticate = require('../middleware/auth');
+const { notify } = require('../lib/notify');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const cloudinary = require('cloudinary').v2;
@@ -175,6 +176,18 @@ taskRouter.post('/:taskId/assign', authenticate, async (req, res) => {
         data: { assignedUserId: userId },
         include: { assignedUser: { select: { id: true, name: true } } },
       });
+
+      // Notify the assigned user (if different from assigner)
+      if (userId !== req.user.id) {
+        await notify(
+          userId,
+          'TASK_ASSIGNED',
+          'Task assigned to you',
+          `You've been assigned "${task.title}" at ${task.listing.name}`,
+          task.listingId
+        );
+      }
+
       return res.json({ message: 'Co-host assigned', task: updated });
     }
 

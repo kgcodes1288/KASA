@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Navbar from './components/Navbar';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -13,6 +14,7 @@ import ContractorJob from './pages/ContractorJob';
 import ContractorMaintenance from './pages/ContractorMaintenance';
 import LegalPage from './pages/LegalPage';
 import ComplianceTerms from './pages/ComplianceTerms';
+import NotificationsPage from './pages/NotificationsPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -41,6 +43,7 @@ function Layout({ children }) {
 export default function App() {
   return (
     <AuthProvider>
+      <NotificationProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/login"    element={<Login />} />
@@ -64,6 +67,9 @@ export default function App() {
           <Route path="/account" element={
             <PrivateRoute><Layout><AccountPage /></Layout></PrivateRoute>
           } />
+          <Route path="/notifications" element={
+            <PrivateRoute><Layout><NotificationsPage /></Layout></PrivateRoute>
+          } />
           <Route path="/accept-invite/:token" element={
             <Layout><AcceptInvitePage /></Layout>
           } />
@@ -71,6 +77,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

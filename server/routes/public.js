@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
+const { notify, notifyListingMembers } = require('../lib/notify');
 
 // GET /api/public/job/:token — return all jobs for this checkout grouped by room
 router.get('/job/:token', async (req, res) => {
@@ -81,6 +82,15 @@ router.post('/job/:token/accept', async (req, res) => {
       data:  { status: 'ACCEPTED' },
     });
 
+    const dateStr = new Date(jobToken.checkoutDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    await notifyListingMembers(
+      jobToken.listingId,
+      'CONTRACTOR_ACCEPTED',
+      'Contractor accepted job',
+      `${jobToken.contractorName || 'Contractor'} accepted the cleaning job on ${dateStr}`,
+      jobToken.listingId
+    );
+
     res.json({ message: 'Job accepted' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -115,7 +125,29 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
     const allItems = await prisma.jobChecklist.findMany({ where: { jobId: item.jobId } });
     const done     = allItems.filter((i) => i.completed).length;
     const status   = done === allItems.length ? 'completed' : done > 0 ? 'in_progress' : 'pending';
+
+    const prevJob = await prisma.job.findUnique({ where: { id: item.jobId } });
     await prisma.job.update({ where: { id: item.jobId }, data: { status } });
+
+    // Notify listing members on status transitions
+    if (prevJob && prevJob.status !== status) {
+      const dateStr = new Date(jobToken.checkoutDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (status === 'in_progress') {
+        await notifyListingMembers(
+          jobToken.listingId,
+          'CONTRACTOR_STARTED',
+          'Contractor started job',
+          `${jobToken.contractorName || 'Contractor'} started the cleaning job on ${dateStr}`
+        );
+      } else if (status === 'completed') {
+        await notifyListingMembers(
+          jobToken.listingId,
+          'JOB_COMPLETED',
+          'Job completed',
+          `${jobToken.contractorName || 'Contractor'} completed the cleaning job on ${dateStr}`
+        );
+      }
+    }
 
     res.json({ success: true, completed, status });
   } catch (err) {
