@@ -31,22 +31,11 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/listings — returns owned + co-hosted listings
+// GET /api/listings — returns owned listings only (co-hosted fetched separately)
 router.get('/', auth, async (req, res) => {
   try {
-    const coHosted = await prisma.listingCoHost.findMany({
-      where: { userId: req.user.id, status: 'ACCEPTED' },
-      select: { listingId: true },
-    });
-    const coHostedIds = coHosted.map((c) => c.listingId);
-
     const listings = await prisma.listing.findMany({
-      where: {
-        OR: [
-          { hostId: req.user.id },
-          { id: { in: coHostedIds } },
-        ],
-      },
+      where: { hostId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
     res.json(listings);
