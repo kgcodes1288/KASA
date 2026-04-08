@@ -8,8 +8,9 @@ async function notify(userId, type, title, message, listingId = null) {
     await prisma.notification.create({
       data: { userId, type, title, message, listingId },
     });
+    console.log(`[notify] Created ${type} for user ${userId}`);
   } catch (err) {
-    console.error('[notify]', err.message);
+    console.error(`[notify] FAILED to create ${type} for user ${userId}:`, err.message);
   }
 }
 
