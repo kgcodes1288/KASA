@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import HowToUseSection from '../components/HowToUseSection';
 import api from '../api';
 import './AccountPage.css';
@@ -54,32 +54,35 @@ function NotificationsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {notifications.map((n) => (
-        <div
-          key={n.id}
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 12,
-            padding: '14px 16px',
-            borderRadius: 10,
-            background: n.read ? 'var(--bg)' : '#eff6ff',
-            border: `1px solid ${n.read ? 'var(--border)' : '#bfdbfe'}`,
-          }}
-        >
-          <span style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{NOTIF_ICON[n.type] || '🔔'}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ fontWeight: n.read ? 500 : 700, fontSize: 14 }}>{n.title}</span>
-              <span style={{ fontSize: 12, color: 'var(--ink-ghost)', flexShrink: 0 }}>{timeAgo(n.createdAt)}</span>
+      {notifications.map((n) => {
+        const inner = (
+          <>
+            <span style={{ fontSize: 22, flexShrink: 0, marginTop: 1 }}>{NOTIF_ICON[n.type] || '🔔'}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontWeight: n.read ? 500 : 700, fontSize: 14 }}>{n.title}</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-ghost)', flexShrink: 0 }}>{timeAgo(n.createdAt)}</span>
+              </div>
+              <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.4 }}>{n.message}</p>
             </div>
-            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--ink-secondary)', lineHeight: 1.4 }}>{n.message}</p>
-          </div>
-          {!n.read && (
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', flexShrink: 0, marginTop: 6 }} />
-          )}
-        </div>
-      ))}
+            {!n.read && (
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', flexShrink: 0, marginTop: 6 }} />
+            )}
+          </>
+        );
+        const cardStyle = {
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          padding: '14px 16px', borderRadius: 10,
+          background: n.read ? 'var(--bg)' : '#eff6ff',
+          border: `1px solid ${n.read ? 'var(--border)' : '#bfdbfe'}`,
+          textDecoration: 'none', color: 'inherit',
+        };
+        return n.listingId ? (
+          <Link key={n.id} to={`/listings/${n.listingId}?tab=jobs`} style={cardStyle}>{inner}</Link>
+        ) : (
+          <div key={n.id} style={cardStyle}>{inner}</div>
+        );
+      })}
     </div>
   );
 }
