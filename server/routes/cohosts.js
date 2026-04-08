@@ -5,6 +5,8 @@ const authenticate2 = require('../middleware/auth');
 const crypto = require('crypto');
 const twilio = require('twilio');
 
+const { notify } = require('../lib/notify');
+
 const router = express.Router();
 
 const twilioClient = twilio(
@@ -205,7 +207,22 @@ router.post('/:id/accept', authenticate2, async (req, res) => {
   const updated = await prisma.listingCoHost.update({
     where: { id: coHost.id },
     data: { status: 'ACCEPTED' },
+    include: {
+      listing: { include: { host: { select: { id: true, name: true } } } },
+      user: { select: { id: true, name: true } },
+    },
   });
+
+  // Notify the listing owner
+  if (updated.listing?.host?.id) {
+    await notify(
+      updated.listing.host.id,
+      'COHOST_ACCEPTED',
+      'Co-host accepted',
+      `${updated.user?.name || 'Someone'} accepted your co-host invite for ${updated.listing.name}`,
+      updated.listingId
+    );
+  }
 
   res.json({ message: 'Invite accepted.', coHost: updated });
 });
