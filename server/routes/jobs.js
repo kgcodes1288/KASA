@@ -94,6 +94,14 @@ router.patch('/:id/checklist/:itemId', auth, async (req, res) => {
 router.patch('/:id/assign', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
+    const existing = await prisma.job.findUnique({ where: { id: req.params.id }, include: { listing: true } });
+    if (!existing) return res.status(404).json({ message: 'Job not found' });
+    const isOwner = existing.listing.hostId === req.user.id;
+    const isCoHost = await prisma.listingCoHost.findFirst({
+      where: { listingId: existing.listingId, userId: req.user.id, status: 'ACCEPTED' },
+    });
+    if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
+
     const job = await prisma.job.update({
       where: { id: req.params.id },
       data: { cleanerId: req.body.cleanerId },
@@ -133,8 +141,13 @@ router.post('/send-link', auth, async (req, res) => {
     let resolvedName = null;
 
     if (contractorId) {
+      // Allow lookup from listing owner's contractors OR the requesting user's contractors
+      const listingOwnerId = listing.hostId;
       const contractor = await prisma.contractor.findFirst({
-        where: { id: contractorId, hostId: req.user.id },
+        where: {
+          id: contractorId,
+          hostId: { in: [req.user.id, listingOwnerId] },
+        },
       });
       if (!contractor) return res.status(404).json({ message: 'Contractor not found' });
       resolvedPhone = contractor.phone;
