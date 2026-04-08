@@ -6,8 +6,6 @@ import HowToUseSection from '../components/HowToUseSection';
 import api from '../api';
 import './AccountPage.css';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
 const NOTIF_ICON = {
   COHOST_ACCEPTED:    '🤝',
   JOB_CREATED:        '📅',
@@ -34,21 +32,14 @@ function NotificationsTab() {
   const { refresh } = useNotifications();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API}/api/notifications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    api.get('/notifications')
+      .then(({ data }) => {
         setNotifications(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
 
-    fetch(`${API}/api/notifications/read-all`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(() => refresh());
+    api.patch('/notifications/read-all').then(() => refresh());
   }, []);
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>;
