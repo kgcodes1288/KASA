@@ -598,6 +598,10 @@ export default function HostDashboard() {
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
   const [activeTab, setActiveTab] = useState('properties');
+  const [pendingInvites, setPendingInvites] = useState([]);
+
+  const loadInvites = () =>
+    api.get('/cohosts/pending').then((r) => setPendingInvites(r.data)).catch(() => {});
 
   const load = () => {
     setLoading(true);
@@ -612,6 +616,19 @@ export default function HostDashboard() {
         setCoHostedListings(cRes.data);
       })
       .finally(() => setLoading(false));
+    loadInvites();
+  };
+
+  const handleAcceptInvite = async (id) => {
+    await api.post(`/cohosts/${id}/accept`);
+    setPendingInvites((prev) => prev.filter((i) => i.id !== id));
+    load(); // refresh co-hosted listings
+  };
+
+  const handleDeclineInvite = async (id) => {
+    if (!window.confirm('Decline this invitation?')) return;
+    await api.post(`/cohosts/${id}/decline`);
+    setPendingInvites((prev) => prev.filter((i) => i.id !== id));
   };
 
   useEffect(load, []);
@@ -681,6 +698,43 @@ const handleSync = async (id) => {
           </button>
         ))}
       </div>
+
+      {/* ── Pending co-host invitations ── */}
+      {pendingInvites.length > 0 && (
+        <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {pendingInvites.map((invite) => (
+            <div key={invite.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 12,
+              padding: '14px 18px', borderRadius: 12,
+              background: '#faf5ff', border: '1px solid #d8b4fe',
+            }}>
+              <div>
+                <p style={{ fontWeight: 600, fontSize: 14, color: '#6d28d9', marginBottom: 2 }}>
+                  🏠 You've been invited to co-host <strong>{invite.listing?.name}</strong>
+                </p>
+                <p style={{ fontSize: 12, color: '#7c3aed' }}>
+                  Invited by {invite.listing?.host?.name} · Role: {invite.role === 'COHOST' ? 'Co-host' : 'View Only'}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => handleAcceptInvite(invite.id)}
+                >
+                  Accept
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => handleDeclineInvite(invite.id)}
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {activeTab === 'calendar' ? (
         <AccountCalendar />
