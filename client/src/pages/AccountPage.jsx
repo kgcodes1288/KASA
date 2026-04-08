@@ -442,6 +442,11 @@ function CoHostSection() {
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>
                                   {ch.user?.name || ch.invitePhone}
                                 </span>
+                                {ch.invitePhone && (
+                                  <span style={{ fontSize: 12, color: 'var(--ink-ghost)', marginLeft: 6 }}>
+                                    {ch.invitePhone}
+                                  </span>
+                                )}
                                 <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
                                 <span style={styles.roleBadge(ch.role)}>
                                   {ch.role === 'COHOST' ? 'Co-host' : 'View Only'}
