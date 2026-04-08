@@ -611,10 +611,9 @@ export default function HostDashboard() {
       api.get('/cohosts/my-listings'),
     ])
       .then(([lRes, jRes, cRes]) => {
-        const ownedIds = new Set(lRes.data.map((l) => l.id));
         setListings(lRes.data);
         setJobs(jRes.data);
-        setCoHostedListings(cRes.data.filter((l) => !ownedIds.has(l.id)));
+        setCoHostedListings(cRes.data);
       })
       .finally(() => setLoading(false));
     loadInvites();
