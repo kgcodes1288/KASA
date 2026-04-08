@@ -32,40 +32,37 @@ export default function Navbar() {
               </NavLink>
             )}
             <Link
-              to="/notifications"
-              style={{ position: 'relative', textDecoration: 'none' }}
+              to="/account"
+              className="badge"
+              style={{
+                background: 'var(--bg)',
+                border: '1.5px solid var(--border)',
+                fontSize: 13,
+                textDecoration: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
             >
-              <span
-                className="badge"
-                style={{
-                  background: 'var(--bg)',
-                  border: '1.5px solid var(--border)',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  display: 'flex',
+              👤 {user.name}
+              {unreadCount > 0 && (
+                <span style={{
+                  background: '#ef4444',
+                  color: '#fff',
+                  borderRadius: '50%',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  minWidth: 18,
+                  height: 18,
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                👤 {user.name}
-                {unreadCount > 0 && (
-                  <span style={{
-                    background: '#ef4444',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    minWidth: 18,
-                    height: 18,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 4px',
-                  }}>
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </span>
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                }}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Link>
             <span className={`badge badge-${user.role}`}>{user.role}</span>
             <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
