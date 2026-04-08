@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../context/NotificationContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import api from '../api';
 
 const TYPE_ICON = {
   COHOST_ACCEPTED:    '🤝',
@@ -31,22 +30,14 @@ export default function NotificationsPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API}/api/notifications`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    api.get('/notifications')
+      .then(({ data }) => {
         setNotifications(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
 
-    // Mark all read
-    fetch(`${API}/api/notifications/read-all`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(() => refresh());
+    api.patch('/notifications/read-all').then(() => refresh());
   }, []);
 
   return (

@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import api from '../api';
 
 const NotificationContext = createContext({ unreadCount: 0, refresh: () => {} });
 
@@ -12,15 +11,8 @@ export function NotificationProvider({ children }) {
 
   const fetchCount = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch(`${API}/api/notifications/unread-count`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setUnreadCount(data.count || 0);
-      }
+      const { data } = await api.get('/notifications/unread-count');
+      setUnreadCount(data.count || 0);
     } catch {
       // silent
     }
