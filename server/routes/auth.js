@@ -154,6 +154,7 @@ router.get('/google/callback', async (req, res) => {
 
 // GET /api/auth/me
 router.get('/me', auth, (req, res) => {
+  console.log('[/auth/me] hasPassword:', !!req.user.password, 'googleId:', !!req.user.googleId);
   res.json(safeUser(req.user));
 });
 
