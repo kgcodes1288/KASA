@@ -727,20 +727,23 @@ function CoHostSection() {
 
 // ── Delete Account Section ───────────────────────────────────────────────────
 function DeleteAccountSection() {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [password, setPassword]     = useState('');
+  const [value, setValue]           = useState('');
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
   const [confirming, setConfirming] = useState(false);
 
+  const isGoogleOnly = !user?.hasPassword;
+  const canConfirm   = isGoogleOnly ? value === 'DELETE' : value.length > 0;
+
   const handleDelete = async () => {
-    if (!password) return;
+    if (!canConfirm) return;
     setLoading(true);
     setError('');
     try {
-      await api.delete('/auth/account', { data: { password } });
+      await api.delete('/auth/account', { data: isGoogleOnly ? {} : { password: value } });
       logout();
       navigate('/login');
     } catch (err) {
@@ -765,16 +768,18 @@ function DeleteAccountSection() {
       ) : (
         <div>
           <p style={{ fontSize: 14, color: '#991b1b', marginBottom: 16, fontWeight: 500 }}>
-            Enter your password to confirm. This action is permanent and cannot be undone.
+            {isGoogleOnly
+              ? 'Type DELETE to confirm. This action is permanent and cannot be undone.'
+              : 'Enter your password to confirm. This action is permanent and cannot be undone.'}
           </p>
           <div className="form-group" style={{ marginBottom: 12 }}>
-            <label htmlFor="deletePassword">Your password</label>
+            <label htmlFor="deleteConfirm">{isGoogleOnly ? 'Type DELETE to confirm' : 'Your password'}</label>
             <input
-              id="deletePassword"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              id="deleteConfirm"
+              type={isGoogleOnly ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={isGoogleOnly ? 'DELETE' : '••••••••'}
               style={{
                 width: '100%',
                 padding: '0.6rem 0.75rem',
@@ -789,7 +794,7 @@ function DeleteAccountSection() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn btn-secondary"
-              onClick={() => { setConfirming(false); setPassword(''); setError(''); }}
+              onClick={() => { setConfirming(false); setValue(''); setError(''); }}
               disabled={loading}
             >
               Cancel
@@ -797,7 +802,7 @@ function DeleteAccountSection() {
             <button
               className="btn btn-danger"
               onClick={handleDelete}
-              disabled={loading || !password}
+              disabled={loading || !canConfirm}
             >
               {loading ? 'Deleting…' : 'Confirm Delete'}
             </button>
