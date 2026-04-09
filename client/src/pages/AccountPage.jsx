@@ -398,6 +398,75 @@ function ContractorsSection() {
   );
 }
 
+// ── Send Message Modal ───────────────────────────────────────────────────────
+function SendMessageModal({ toUser, listingId, listingName, onClose }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody]       = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent]       = useState(false);
+  const [error, setError]     = useState('');
+
+  const handleSend = async () => {
+    if (!subject.trim() || !body.trim()) { setError('Subject and message are required'); return; }
+    setSending(true); setError('');
+    try {
+      await api.post('/email/send', { toUserId: toUser.id, subject, body, listingId });
+      setSent(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h3>Message {toUser.name}</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+        {sent ? (
+          <div style={{ textAlign: 'center', padding: '28px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>✉️</div>
+            <p style={{ fontWeight: 600, marginBottom: 6 }}>Message sent!</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>
+              {toUser.name} will receive your message by email.
+            </p>
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onClose}>Done</button>
+          </div>
+        ) : (
+          <>
+            {listingName && (
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 16 }}>
+                📍 Re: <strong>{listingName}</strong>
+              </p>
+            )}
+            {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-group">
+              <label>Subject</label>
+              <input className="input" placeholder="e.g. Question about checkout schedule"
+                value={subject} onChange={(e) => setSubject(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label>Message</label>
+              <textarea className="input" rows={5} placeholder="Write your message…"
+                value={body} onChange={(e) => setBody(e.target.value)}
+                style={{ resize: 'vertical' }} />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSend} disabled={sending}>
+                {sending ? 'Sending…' : '✉️ Send'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Co-host Access Section ───────────────────────────────────────────────────
 function CoHostSection() {
   const { user } = useAuth();
@@ -408,6 +477,7 @@ function CoHostSection() {
   const [inviteForm, setInviteForm]             = useState({});
   const [expandedListing, setExpandedListing]   = useState(null);
   const [inviteLinks, setInviteLinks]           = useState({});
+  const [messageModal, setMessageModal]         = useState(null); // { toUser, listingId, listingName }
 
   const load = async () => {
     setLoading(true);
@@ -544,12 +614,20 @@ function CoHostSection() {
                                   </button>
                                 )}
                                 {ch.status === 'ACCEPTED' && ch.userId && (
-                                  <button
-                                    className="btn btn-danger btn-sm"
-                                    onClick={() => handleRemove(l.id, ch.userId)}
-                                  >
-                                    Remove
-                                  </button>
+                                  <>
+                                    <button
+                                      className="btn btn-secondary btn-sm"
+                                      onClick={() => setMessageModal({ toUser: ch.user, listingId: l.id, listingName: l.name })}
+                                    >
+                                      ✉️ Message
+                                    </button>
+                                    <button
+                                      className="btn btn-danger btn-sm"
+                                      onClick={() => handleRemove(l.id, ch.userId)}
+                                    >
+                                      Remove
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -653,7 +731,17 @@ function CoHostSection() {
                     {l.coHostRole === 'COHOST' ? 'Co-host' : 'View Only'}
                   </span>
                 </div>
-                <button className="btn btn-danger btn-sm" onClick={() => handleLeave(l.id)}>Leave</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {l.host && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setMessageModal({ toUser: l.host, listingId: l.id, listingName: l.name })}
+                    >
+                      ✉️ Message Owner
+                    </button>
+                  )}
+                  <button className="btn btn-danger btn-sm" onClick={() => handleLeave(l.id)}>Leave</button>
+                </div>
               </div>
             ))}
           </div>
@@ -662,6 +750,15 @@ function CoHostSection() {
 
       {myListings.length === 0 && coHostedListings.length === 0 && (
         <p style={styles.emptyText}>No co-host activity yet.</p>
+      )}
+
+      {messageModal && (
+        <SendMessageModal
+          toUser={messageModal.toUser}
+          listingId={messageModal.listingId}
+          listingName={messageModal.listingName}
+          onClose={() => setMessageModal(null)}
+        />
       )}
     </section>
   );
