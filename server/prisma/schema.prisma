@@ -57,9 +57,8 @@ model ListingCoHost {
   role        CoHostRole
   status      CoHostStatus  @default(PENDING)
   inviteToken String        @unique
-  invitePhone String
+  inviteEmail String
   createdAt   DateTime      @default(now())
-  smsConsent Boolean        @default(false)
 
   listing     Listing       @relation("CoHostListing", fields: [listingId], references: [id], onDelete: Cascade)
   user        User?         @relation("CoHostUser", fields: [userId], references: [id], onDelete: Cascade)

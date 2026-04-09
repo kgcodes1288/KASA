@@ -512,20 +512,17 @@ function CoHostSection() {
 
   const handleInvite = async (listingId) => {
     const form = inviteForm[listingId] || {};
-    if (!form.phone || !form.role) return;
+    if (!form.email || !form.role) return;
     setField(listingId, 'loading', true);
     setField(listingId, 'msg', null);
-    setInviteLinks((prev) => ({ ...prev, [listingId]: null }));
     try {
       const { data } = await api.post(`/listings/${listingId}/cohosts/invite`, {
-        phone: form.phone,
+        email: form.email,
         role: form.role,
-        smsConsent: form.smsConsent === true,
       });
       setField(listingId, 'msg', { type: 'success', text: data.message });
-      setField(listingId, 'phone', '');
+      setField(listingId, 'email', '');
       setField(listingId, 'role', '');
-      setField(listingId, 'smsConsent', false);
       load();
     } catch (err) {
       setField(listingId, 'msg', {
@@ -592,11 +589,11 @@ function CoHostSection() {
                             <div key={ch.id} style={styles.coHostRow}>
                               <div>
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>
-                                  {ch.user?.name || ch.invitePhone}
+                                  {ch.user?.name || ch.inviteEmail}
                                 </span>
-                                {ch.invitePhone && (
+                                {ch.inviteEmail && (
                                   <span style={{ fontSize: 12, color: 'var(--ink-ghost)', marginLeft: 6 }}>
-                                    {ch.invitePhone}
+                                    {ch.inviteEmail}
                                   </span>
                                 )}
                                 <span style={styles.statusBadge(ch.status)}>{ch.status}</span>
@@ -639,10 +636,11 @@ function CoHostSection() {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <input
                             className="input"
-                            placeholder="+1 555 000 0000"
-                            value={form.phone || ''}
-                            onChange={(e) => setField(l.id, 'phone', e.target.value)}
-                            style={{ flex: 1, minWidth: 160 }}
+                            type="email"
+                            placeholder="cohost@example.com"
+                            value={form.email || ''}
+                            onChange={(e) => setField(l.id, 'email', e.target.value)}
+                            style={{ flex: 1, minWidth: 200 }}
                           />
                           <select
                             className="input"
@@ -657,52 +655,15 @@ function CoHostSection() {
                           <button
                             className="btn btn-primary btn-sm"
                             onClick={() => handleInvite(l.id)}
-                            disabled={form.loading || !form.phone || !form.role || !form.smsConsent}
+                            disabled={form.loading || !form.email || !form.role}
                           >
                             {form.loading ? 'Sending…' : 'Send Invite'}
                           </button>
                         </div>
-
-                        {/* SMS Consent checkbox */}
-                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10,
-                          cursor: 'pointer', padding: '10px 12px', borderRadius: 8,
-                          background: '#f0fdf4', border: '1px solid #86efac', marginTop: 10 }}>
-                          <input
-                            type="checkbox"
-                            checked={form.smsConsent || false}
-                            onChange={(e) => setField(l.id, 'smsConsent', e.target.checked)}
-                            style={{ marginTop: 2, width: 15, height: 15, flexShrink: 0, cursor: 'pointer' }}
-                          />
-                          <span style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
-                            I confirm this person has agreed to receive SMS messages from CleanStay.
-                          </span>
-                        </label>
-
                         {form.msg && (
                           <p className={`form-msg ${form.msg.type}`} style={{ marginTop: 8 }}>
                             {form.msg.text}
                           </p>
-                        )}
-                        {inviteLinks[l.id] && (
-                          <div style={styles.inviteLinkBox}>
-                            <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                              No account found — share this link manually:
-                            </p>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <input
-                                className="input"
-                                readOnly
-                                value={inviteLinks[l.id]}
-                                style={{ fontSize: 12, flex: 1 }}
-                              />
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => navigator.clipboard.writeText(inviteLinks[l.id])}
-                              >
-                                Copy
-                              </button>
-                            </div>
-                          </div>
                         )}
                       </div>
                     </div>

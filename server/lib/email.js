@@ -131,4 +131,61 @@ async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, 
   console.log(`[email] Direct message sent from ${fromEmail} to ${toEmail}`, result.data?.id);
 }
 
-module.exports = { sendNotificationEmail, sendDirectEmail };
+/**
+ * Send a co-host invite email.
+ */
+async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl }) {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
+  const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#0d9488;padding:24px 32px;">
+            <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">🧹 CleanStay</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">You've been invited to co-host</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+              <strong>${fromName}</strong> has invited you to join <strong>${listingName}</strong> as a <strong>${roleLabel}</strong> on CleanStay.
+            </p>
+            <a href="${inviteUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+              Accept Invite
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
+            <p style="margin:0;font-size:12px;color:#9ca3af;">
+              If you weren't expecting this, you can ignore this email.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: [toEmail],
+      subject: `${fromName} invited you to co-host "${listingName}" on CleanStay`,
+      html,
+    });
+    console.log(`[email] Invite sent to ${toEmail}`);
+  } catch (err) {
+    console.error(`[email] Failed to send invite to ${toEmail}:`, err.message);
+  }
+}
+
+module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail };
