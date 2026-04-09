@@ -135,7 +135,10 @@ async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, 
  * Send a co-host invite email.
  */
 async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl }) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[email] sendInviteEmail skipped — RESEND_API_KEY is not set');
+    return;
+  }
 
   const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
   const html = `
@@ -175,17 +178,20 @@ async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl
 </body>
 </html>`;
 
-  try {
-    await resend.emails.send({
-      from: FROM,
-      to: [toEmail],
-      subject: `${fromName} invited you to co-host "${listingName}" on CleanStay`,
-      html,
-    });
-    console.log(`[email] Invite sent to ${toEmail}`);
-  } catch (err) {
-    console.error(`[email] Failed to send invite to ${toEmail}:`, err.message);
+  console.log(`[email] Sending invite to ${toEmail} from=${FROM}`);
+  const result = await resend.emails.send({
+    from: FROM,
+    to: [toEmail],
+    subject: `${fromName} invited you to co-host "${listingName}" on CleanStay`,
+    html,
+  });
+
+  if (result.error) {
+    console.error(`[email] Resend rejected invite to ${toEmail}:`, result.error);
+    throw new Error(result.error.message || 'Resend rejected the invite email');
   }
+
+  console.log(`[email] Invite sent to ${toEmail} id=${result.data?.id}`);
 }
 
 module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail };

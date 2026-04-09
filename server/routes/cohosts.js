@@ -81,13 +81,18 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
 
   // Send invite email
   const inviteUrl = `${process.env.CLIENT_URL}/accept-invite/${inviteToken}`;
-  await sendInviteEmail({
-    toEmail:     email,
-    fromName:    req.user.name,
-    listingName: listing.name,
-    role,
-    inviteUrl,
-  });
+  try {
+    await sendInviteEmail({
+      toEmail:     email,
+      fromName:    req.user.name,
+      listingName: listing.name,
+      role,
+      inviteUrl,
+    });
+  } catch (emailErr) {
+    console.error('[cohosts] invite email failed:', emailErr.message);
+    // Still return success — the invite record exists and the user can resend
+  }
 
   res.status(201).json({ message: 'Invite sent via email.', coHost });
 });
