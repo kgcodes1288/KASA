@@ -615,7 +615,7 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         {isOwner && (
           <>
             <button className="btn btn-secondary btn-sm" onClick={() => onInvite(l)}>
-              👥 Invite co-host
+              👥 Invite
             </button>
             <button className="btn btn-danger btn-sm" onClick={() => onDelete(l.id)}>
               🗑
