@@ -98,8 +98,9 @@ router.get('/google/callback', async (req, res) => {
     });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) {
+      const msg = tokenData.error_description || tokenData.error || 'Token exchange failed';
       console.error('Google token exchange failed:', tokenData);
-      return res.redirect(`${clientUrl}/login?error=google_failed`);
+      return res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent(msg)}`);
     }
 
     // Fetch Google profile
@@ -107,7 +108,7 @@ router.get('/google/callback', async (req, res) => {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const profile = await profileRes.json();
-    if (!profile.email) return res.redirect(`${clientUrl}/login?error=google_failed`);
+    if (!profile.email) return res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent('Could not get email from Google')}`);
 
     // Find existing user by Google ID or email
     let user = await prisma.user.findFirst({
@@ -144,7 +145,7 @@ router.get('/google/callback', async (req, res) => {
     res.redirect(`${clientUrl}/auth/callback?token=${token}`);
   } catch (err) {
     console.error('Google OAuth error:', err);
-    res.redirect(`${clientUrl}/login?error=google_failed`);
+    res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent(err.message || 'Unknown error')}`);
   }
 });
 

@@ -10,9 +10,10 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const redirect = searchParams.get('redirect');
   const googleError = searchParams.get('error') === 'google_failed';
+  const googleMsg = searchParams.get('msg');
 
   const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState(googleError ? 'Google sign-in failed. Please try again.' : '');
+  const [error, setError] = useState(googleError ? (googleMsg ? `Google sign-in failed: ${googleMsg}` : 'Google sign-in failed. Please try again.') : '');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
