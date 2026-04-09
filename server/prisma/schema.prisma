@@ -57,7 +57,7 @@ model ListingCoHost {
   role        CoHostRole
   status      CoHostStatus  @default(PENDING)
   inviteToken String        @unique
-  inviteEmail String
+  inviteEmail String?
   createdAt   DateTime      @default(now())
 
   listing     Listing       @relation("CoHostListing", fields: [listingId], references: [id], onDelete: Cascade)
