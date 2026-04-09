@@ -73,7 +73,7 @@ async function sendNotificationEmail({ to, toName, subject, title, message, acti
  * Send a direct message email from one user to another.
  */
 async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, body, listingName }) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.RESEND_API_KEY) throw new Error('Email service not configured (missing RESEND_API_KEY)');
 
   const html = `
 <!DOCTYPE html>
@@ -115,18 +115,20 @@ async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, 
 </body>
 </html>`;
 
-  try {
-    await resend.emails.send({
-      from:       FROM,
-      to:         [toEmail],
-      reply_to:   fromEmail,
-      subject:    `[CleanStay] ${subject}`,
-      html,
-    });
-    console.log(`[email] Direct message from ${fromEmail} to ${toEmail}`);
-  } catch (err) {
-    console.error(`[email] Failed direct message to ${toEmail}:`, err.message);
+  const result = await resend.emails.send({
+    from:       FROM,
+    to:         [toEmail],
+    reply_to:   fromEmail,
+    subject:    `[CleanStay] ${subject}`,
+    html,
+  });
+
+  if (result.error) {
+    console.error(`[email] Resend error to ${toEmail}:`, result.error);
+    throw new Error(result.error.message || 'Resend rejected the email');
   }
+
+  console.log(`[email] Direct message sent from ${fromEmail} to ${toEmail}`, result.data?.id);
 }
 
 module.exports = { sendNotificationEmail, sendDirectEmail };
