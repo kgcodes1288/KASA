@@ -1,27 +1,12 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-const { authenticate } = require('../middleware/auth');
 const authenticate2 = require('../middleware/auth');
 const crypto = require('crypto');
-const twilio = require('twilio');
 
 const { notify } = require('../lib/notify');
+const { sendInviteEmail } = require('../lib/email');
 
 const router = express.Router();
-
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
-
-// Strip to 10 digits (removes +1 country code). Use toE164() for Twilio calls.
-const normalizePhone = (phone) => {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
-  return digits;
-};
-const toE164 = (phone) => `+1${normalizePhone(phone)}`;
 
 // Helper — check what role a user has on a listing
 async function getListingRole(listingId, userId) {
@@ -43,12 +28,12 @@ async function getListingRole(listingId, userId) {
 // POST /api/listings/:id/cohosts/invite
 router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const { id: listingId } = req.params;
-  const { phone: rawPhone, role, smsConsent } = req.body;
-  const phone = normalizePhone(rawPhone);
+  const { email: rawEmail, role } = req.body;
+  const email = rawEmail?.trim().toLowerCase();
   const requesterId = req.user.id;
 
-  if (!phone || !role) {
-    return res.status(400).json({ error: 'Phone number and role are required.' });
+  if (!email || !role) {
+    return res.status(400).json({ error: 'Email and role are required.' });
   }
 
   if (!['COHOST', 'VIEW_ONLY'].includes(role)) {
@@ -60,7 +45,7 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
     return res.status(403).json({ error: 'Only the listing owner can invite co-hosts.' });
   }
 
-  if (phone === normalizePhone(req.user.phone)) {
+  if (email === req.user.email?.toLowerCase()) {
     return res.status(400).json({ error: 'You cannot invite yourself.' });
   }
 
@@ -68,17 +53,17 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const existing = await prisma.listingCoHost.findFirst({
     where: {
       listingId,
-      invitePhone: phone,
+      inviteEmail: email,
       status: { in: ['PENDING', 'ACCEPTED'] },
     },
   });
 
   if (existing) {
-    return res.status(409).json({ error: 'This phone number already has a pending or active invite for this listing.' });
+    return res.status(409).json({ error: 'This email already has a pending or active invite for this listing.' });
   }
 
   // Check if invitee already has an account
-  const invitee = await prisma.user.findFirst({ where: { phone } });
+  const invitee = await prisma.user.findUnique({ where: { email } });
 
   const inviteToken = crypto.randomBytes(32).toString('hex');
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
@@ -86,26 +71,25 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   const coHost = await prisma.listingCoHost.create({
     data: {
       listingId,
-      userId:     invitee ? invitee.id : null,
+      userId:      invitee ? invitee.id : null,
       role,
-      status:     'PENDING',
+      status:      'PENDING',
       inviteToken,
-      invitePhone: phone,
-      smsConsent:  smsConsent === true,
+      inviteEmail: email,
     },
   });
 
-  // Send SMS — link goes to login, which redirects to account page
-  const link = `${process.env.CLIENT_URL}/login?redirect=/account`;
-  const roleLabel = role === 'COHOST' ? 'Co-host' : 'View Only';
-
-  await twilioClient.messages.create({
-    body: `CleanStay: ${req.user.name} has invited you to co-host "${listing.name}" as ${roleLabel}. Tap to join: ${link}. Reply STOP to opt out.`,
-    from: process.env.TWILIO_PHONE,
-    to: toE164(phone),
+  // Send invite email
+  const inviteUrl = `${process.env.CLIENT_URL}/accept-invite/${inviteToken}`;
+  await sendInviteEmail({
+    toEmail:     email,
+    fromName:    req.user.name,
+    listingName: listing.name,
+    role,
+    inviteUrl,
   });
 
-  res.status(201).json({ message: 'Invite sent via SMS.', coHost });
+  res.status(201).json({ message: 'Invite sent via email.', coHost });
 });
 
 // GET /api/listings/:id/cohosts
@@ -137,10 +121,9 @@ router.get('/:id/cohosts', authenticate2, async (req, res) => {
     status: 'ACCEPTED',
     isOwner: true,
     user: listing.host,
-    invitePhone: null,
+    inviteEmail: null,
   };
 
-  // Owner-only management fields (invite/withdraw) stay; assignable list includes owner
   res.json([ownerEntry, ...coHosts]);
 });
 
@@ -167,18 +150,14 @@ router.get('/my-listings', authenticate2, async (req, res) => {
 
 // GET /api/cohosts/pending
 router.get('/pending', authenticate2, async (req, res) => {
-  const phone10 = req.user.phone ? normalizePhone(req.user.phone) : null;
-  // Check both 10-digit and +1 formats to match records created before normalization was consistent
-  const phoneVariants = phone10
-    ? [phone10, `+1${phone10}`].filter(Boolean)
-    : [];
+  const userEmail = req.user.email?.toLowerCase();
 
-  // Match by userId OR by invitePhone (handles sign-ups where userId wasn't linked yet)
+  // Match by userId OR by inviteEmail (handles cases where userId wasn't linked yet)
   const whereClause = {
     status: 'PENDING',
     OR: [
       { userId: req.user.id },
-      ...(phoneVariants.length ? [{ invitePhone: { in: phoneVariants }, userId: null }] : []),
+      ...(userEmail ? [{ inviteEmail: userEmail, userId: null }] : []),
     ],
   };
 
@@ -190,7 +169,7 @@ router.get('/pending', authenticate2, async (req, res) => {
     },
   });
 
-  // Auto-link any invites found by phone that don't have a userId yet
+  // Auto-link any invites found by email that don't have a userId yet
   const unlinked = pending.filter((p) => !p.userId);
   if (unlinked.length > 0) {
     await prisma.listingCoHost.updateMany({

@@ -34,19 +34,11 @@ router.post('/register', async (req, res) => {
       data: { name, email, password: hashed, role, phone: normalizePhone(phone) || null },
     });
 
-// Auto-link any pending co-host invites matching this phone number.
-// Check both 10-digit and +1 formats to catch records stored either way.
-if (phone) {
-  const phone10 = normalizePhone(phone);
-  await prisma.listingCoHost.updateMany({
-    where: {
-      invitePhone: { in: [phone10, `+1${phone10}`] },
-      status: 'PENDING',
-      userId: null,
-    },
-    data: { userId: user.id },
-  });
-}
+// Auto-link any pending co-host invites matching this email
+await prisma.listingCoHost.updateMany({
+  where: { inviteEmail: email.toLowerCase(), status: 'PENDING', userId: null },
+  data: { userId: user.id },
+});
 
     res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
@@ -141,6 +133,12 @@ router.get('/google/callback', async (req, res) => {
         },
       });
     }
+
+    // Auto-link any pending co-host invites matching this email
+    await prisma.listingCoHost.updateMany({
+      where: { inviteEmail: profile.email.toLowerCase(), status: 'PENDING', userId: null },
+      data: { userId: user.id },
+    });
 
     const token = signToken(user.id);
     res.redirect(`${clientUrl}/auth/callback?token=${token}`);

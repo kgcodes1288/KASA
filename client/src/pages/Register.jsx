@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api';
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'host', phone: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'host' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -85,11 +85,6 @@ export default function Register() {
             <label>Password</label>
             <input className="input" type="password" placeholder="At least 6 characters" value={form.password}
               onChange={(e) => set('password', e.target.value)} required minLength={6} />
-          </div>
-          <div className="form-group">
-            <label>Phone (for SMS alerts)</label>
-            <input className="input" type="tel" placeholder="+1 555 000 0000" value={form.phone}
-              onChange={(e) => set('phone', e.target.value)} />
           </div>
           <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} disabled={loading}>
             {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Create account'}
