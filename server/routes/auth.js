@@ -7,7 +7,11 @@ const auth = require('../middleware/auth');
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
 
-const safeUser = (u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone, hasPassword: !!u.password });
+const safeUser = (u) => ({
+  id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone,
+  hasPassword: !!u.password,
+  isAdmin: !!(process.env.ADMIN_EMAIL && u.email === process.env.ADMIN_EMAIL),
+});
 
 // Strip to 10 digits (removes +1 country code)
 const normalizePhone = (phone) => {

@@ -16,6 +16,7 @@ import LegalPage from './pages/LegalPage';
 import ComplianceTerms from './pages/ComplianceTerms';
 import NotificationsPage from './pages/NotificationsPage';
 import AuthCallback from './pages/AuthCallback';
+import AdminPage from './pages/AdminPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -74,6 +75,9 @@ export default function App() {
           } />
           <Route path="/accept-invite/:token" element={
             <Layout><AcceptInvitePage /></Layout>
+          } />
+          <Route path="/admin" element={
+            <PrivateRoute><Layout><AdminPage /></Layout></PrivateRoute>
           } />
           <Route path="/privacy-terms" element={<LegalPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
