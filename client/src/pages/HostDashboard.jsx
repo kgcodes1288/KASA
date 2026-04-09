@@ -495,10 +495,81 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
   );
 }
 
+// ── Quick Invite Modal ────────────────────────────────────────────────────────
+function QuickInviteModal({ listing, onClose, onSaved }) {
+  const [email, setEmail] = useState('');
+  const [role, setRole]   = useState('COHOST');
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSend = async () => {
+    if (!email.trim()) { setError('Email is required'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/listings/${listing.id}/cohosts/invite`, { email: email.trim(), role });
+      setSuccess(true);
+      setTimeout(() => onSaved(), 1800);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Invite failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <h3>Invite co-host — {listing.name}</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+        {success ? (
+          <div className="alert alert-success" style={{ margin: '0 0 12px' }}>✅ Invite sent! They'll receive an email shortly.</div>
+        ) : (
+          <>
+            {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-group">
+              <label>Email address</label>
+              <input
+                className="input"
+                type="email"
+                placeholder="cohost@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              />
+            </div>
+            <div className="form-group">
+              <label>Role</label>
+              <select className="input" value={role} onChange={(e) => setRole(e.target.value)}>
+                <option value="COHOST">Co-host (can manage)</option>
+                <option value="VIEW_ONLY">View Only</option>
+              </select>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSend} disabled={saving}>
+                {saving ? 'Sending…' : '📧 Send invite'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Listing Card ─────────────────────────────────────────────────────────────
-function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, onSync, onAddTask, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
+function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
+
+  // Build "Co-hosted with …" text from accepted co-hosts
+  const coHostNames = (coHosts || []).map((ch) => ch.user?.name).filter(Boolean);
+  const coHostedText = coHostNames.length > 0
+    ? `Co-hosted with ${coHostNames.slice(0, -1).join(', ')}${coHostNames.length > 1 ? ' and ' : ''}${coHostNames[coHostNames.length - 1]}`
+    : null;
 
   return (
     <div key={l.id} className="card">
@@ -509,6 +580,11 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
           {!isOwner && l.host && (
             <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 4 }}>
               Owner: {l.host.name}
+            </p>
+          )}
+          {isOwner && coHostedText && (
+            <p style={{ fontSize: 12, color: 'var(--teal)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              👥 {coHostedText}
             </p>
           )}
         </div>
@@ -537,9 +613,14 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
           </>
         )}
         {isOwner && (
-          <button className="btn btn-danger btn-sm" onClick={() => onDelete(l.id)}>
-            🗑
-          </button>
+          <>
+            <button className="btn btn-secondary btn-sm" onClick={() => onInvite(l)}>
+              👥 Invite co-host
+            </button>
+            <button className="btn btn-danger btn-sm" onClick={() => onDelete(l.id)}>
+              🗑
+            </button>
+          </>
         )}
       </div>
 
@@ -597,6 +678,8 @@ export default function HostDashboard() {
   const [syncErrors, setSyncErrors] = useState({});
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
+  const [quickInviteModal, setQuickInviteModal] = useState(null); // listing
+  const [listingCoHosts, setListingCoHosts] = useState({}); // { [listingId]: acceptedCoHosts[] }
   const [activeTab, setActiveTab] = useState('properties');
   const [pendingInvites, setPendingInvites] = useState([]);
 
@@ -611,9 +694,23 @@ export default function HostDashboard() {
       api.get('/cohosts/my-listings'),
     ])
       .then(([lRes, jRes, cRes]) => {
-        setListings(lRes.data);
+        const ownedListings = lRes.data;
+        setListings(ownedListings);
         setJobs(jRes.data);
         setCoHostedListings(cRes.data);
+        // Fetch accepted co-hosts for each owned listing (for banner + invite shortcut)
+        return Promise.all(
+          ownedListings.map((l) =>
+            api.get(`/listings/${l.id}/cohosts`)
+              .then((r) => [l.id, r.data.filter((ch) => ch.status === 'ACCEPTED' && !ch.isOwner)])
+              .catch(() => [l.id, []])
+          )
+        );
+      })
+      .then((results) => {
+        const map = {};
+        results.forEach(([id, coHosts]) => { map[id] = coHosts; });
+        setListingCoHosts(map);
       })
       .finally(() => setLoading(false));
     loadInvites();
@@ -768,11 +865,13 @@ const handleSync = async (id) => {
                     l={l}
                     isOwner={true}
                     coHostRole={null}
+                    coHosts={listingCoHosts[l.id] || []}
                     listingJobs={jobsForListing(l.id)}
                     onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
                     onDelete={handleDelete}
                     onSync={handleSync}
                     onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: true })}
+                    onInvite={(l) => setQuickInviteModal(l)}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
@@ -796,11 +895,13 @@ const handleSync = async (id) => {
                     l={l}
                     isOwner={false}
                     coHostRole={l.coHostRole}
+                    coHosts={[]}
                     listingJobs={jobsForListing(l.id)}
                     onEdit={(l) => { setEditTarget(l); setShowModal(true); }}
                     onDelete={handleDelete}
                     onSync={handleSync}
                     onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: false })}
+                    onInvite={() => {}}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     expandedCalendars={expandedCalendars}
@@ -827,6 +928,13 @@ const handleSync = async (id) => {
           currentUser={currentUser}
           onClose={() => setQuickTaskModal(null)}
           onSaved={() => setQuickTaskModal(null)}
+        />
+      )}
+      {quickInviteModal && (
+        <QuickInviteModal
+          listing={quickInviteModal}
+          onClose={() => setQuickInviteModal(null)}
+          onSaved={() => { setQuickInviteModal(null); load(); }}
         />
       )}
     </div>
