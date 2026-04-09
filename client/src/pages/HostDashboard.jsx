@@ -521,7 +521,7 @@ function ListingCard({ l, isOwner, coHostRole, listingJobs, onEdit, onDelete, on
 
       <div className="cluster">
         <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
-          🛏 Manage rooms
+          🏠 Manage Listing & Jobs
         </Link>
         {canEdit && (
           <>
