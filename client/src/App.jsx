@@ -15,6 +15,7 @@ import ContractorMaintenance from './pages/ContractorMaintenance';
 import LegalPage from './pages/LegalPage';
 import ComplianceTerms from './pages/ComplianceTerms';
 import NotificationsPage from './pages/NotificationsPage';
+import AuthCallback from './pages/AuthCallback';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -48,6 +49,7 @@ export default function App() {
         <Routes>
           <Route path="/login"    element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/job/:token" element={<ContractorJob />} />
           <Route path="/maintenance/:token" element={<ContractorMaintenance />} />
           <Route path="/compliance-terms" element={<ComplianceTerms />} />

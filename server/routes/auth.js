@@ -61,11 +61,92 @@ router.post('/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password required' });
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.password)))
+    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user.password)
+      return res.status(401).json({ message: 'This account uses Google sign-in. Please use "Continue with Google".' });
+    if (!(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ message: 'Invalid credentials' });
     res.json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/auth/google — redirect to Google OAuth consent screen
+router.get('/google', (req, res) => {
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: process.env.GOOGLE_CALLBACK_URL,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// GET /api/auth/google/callback — exchange code, find/create user, return JWT
+router.get('/google/callback', async (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  try {
+    const { code } = req.query;
+    if (!code) return res.redirect(`${clientUrl}/login?error=google_failed`);
+
+    // Exchange auth code for access token
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: process.env.GOOGLE_CALLBACK_URL,
+        grant_type: 'authorization_code',
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      console.error('Google token exchange failed:', tokenData);
+      return res.redirect(`${clientUrl}/login?error=google_failed`);
+    }
+
+    // Fetch Google profile
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json();
+    if (!profile.email) return res.redirect(`${clientUrl}/login?error=google_failed`);
+
+    // Find existing user by Google ID or email
+    let user = await prisma.user.findFirst({
+      where: { OR: [{ googleId: profile.id }, { email: profile.email }] },
+    });
+
+    if (user) {
+      // Link Google ID if signing in via email match for the first time
+      if (!user.googleId) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId: profile.id },
+        });
+      }
+    } else {
+      // Create new user
+      user = await prisma.user.create({
+        data: {
+          name: profile.name || profile.email.split('@')[0],
+          email: profile.email,
+          googleId: profile.id,
+          role: 'host',
+        },
+      });
+    }
+
+    const token = signToken(user.id);
+    res.redirect(`${clientUrl}/auth/callback?token=${token}`);
+  } catch (err) {
+    console.error('Google OAuth error:', err);
+    res.redirect(`${clientUrl}/login?error=google_failed`);
   }
 });
 
@@ -102,6 +183,8 @@ router.put('/password', auth, async (req, res) => {
       return res.status(400).json({ message: 'Both fields are required' });
     if (newPassword.length < 6)
       return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    if (!req.user.password)
+      return res.status(400).json({ message: 'This account uses Google sign-in and has no password to change.' });
     const isMatch = await bcrypt.compare(currentPassword, req.user.password);
     if (!isMatch)
       return res.status(401).json({ message: 'Current password is incorrect' });
@@ -120,12 +203,14 @@ router.put('/password', auth, async (req, res) => {
 router.delete('/account', auth, async (req, res) => {
   try {
     const { password } = req.body;
-    if (!password)
-      return res.status(400).json({ message: 'Password is required to delete your account' });
-
-    const isMatch = await bcrypt.compare(password, req.user.password);
-    if (!isMatch)
-      return res.status(401).json({ message: 'Incorrect password' });
+    // Google-only accounts can delete without password
+    if (req.user.password) {
+      if (!password)
+        return res.status(400).json({ message: 'Password is required to delete your account' });
+      const isMatch = await bcrypt.compare(password, req.user.password);
+      if (!isMatch)
+        return res.status(401).json({ message: 'Incorrect password' });
+    }
 
     // Cascades handle listings, rooms, jobs, co-hosts via onDelete: Cascade
     await prisma.user.delete({ where: { id: req.user.id } });
