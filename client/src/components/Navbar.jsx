@@ -53,6 +53,12 @@ export default function Navbar() {
                 </span>
               )}
             </Link>
+            {user.isAdmin && (
+              <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                style={{ fontSize: 13, color: '#6366f1', fontWeight: 600 }}>
+                ⚙️ Admin
+              </NavLink>
+            )}
             <span className={`badge badge-${user.role}`}>{user.role}</span>
             <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
               Sign out
