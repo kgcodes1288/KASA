@@ -66,6 +66,7 @@ router.post('/login', async (req, res) => {
 
 // GET /api/auth/google — redirect to Google OAuth consent screen
 router.get('/google', (req, res) => {
+  console.log('[Google OAuth] Initiating redirect to Google');
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: process.env.GOOGLE_CALLBACK_URL,
@@ -80,6 +81,7 @@ router.get('/google', (req, res) => {
 // GET /api/auth/google/callback — exchange code, find/create user, return JWT
 router.get('/google/callback', async (req, res) => {
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  console.log('[Google OAuth] Callback received, code present:', !!req.query.code);
   try {
     const { code } = req.query;
     if (!code) return res.redirect(`${clientUrl}/login?error=google_failed`);
@@ -142,6 +144,7 @@ router.get('/google/callback', async (req, res) => {
     });
 
     const token = signToken(user.id);
+    console.log('[Google OAuth] Success — redirecting to', `${clientUrl}/auth/callback`);
     res.redirect(`${clientUrl}/auth/callback?token=${token}`);
   } catch (err) {
     console.error('Google OAuth error:', err);
