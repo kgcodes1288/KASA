@@ -37,8 +37,8 @@ export default function CleanerDashboard() {
           </div>
 
           <p style={{ fontSize: 13, marginBottom: 10 }}>
-            📅 Checkout: <strong>{new Date(j.checkoutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</strong>
-            {j.checkinDate && ` → Check-in: ${new Date(j.checkinDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+            📅 Checkout: <strong>{new Date(j.checkoutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}</strong>
+            {j.checkinDate && ` → Check-in: ${new Date(j.checkinDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`}
           </p>
 
           {total > 0 && (

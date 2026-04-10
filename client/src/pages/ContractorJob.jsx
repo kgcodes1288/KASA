@@ -106,7 +106,7 @@ export default function ContractorJob() {
           </h1>
           <p style={{ fontSize: 14, color: '#64748b', marginBottom: 2 }}>
             📅 Checkout: {new Date(data.checkoutDate).toLocaleDateString('en-US', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
             })}
           </p>
           {data.listingAddress && (
