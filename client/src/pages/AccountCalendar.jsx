@@ -37,7 +37,18 @@ export default function AccountCalendar() {
 
   useEffect(() => {
     api.get('/calendar')
-      .then((r) => setData(r.data))
+      .then((r) => {
+        setData(r.data);
+        // Auto-select the hosted property with the most jobs
+        const { listings, events } = r.data;
+        if (listings.length > 0) {
+          const jobCount = {};
+          listings.forEach((l) => { jobCount[l.id] = 0; });
+          events.forEach((e) => { if (jobCount[e.listingId] !== undefined) jobCount[e.listingId]++; });
+          const best = listings.reduce((a, b) => jobCount[b.id] > jobCount[a.id] ? b : a);
+          setSelectedProperty(best.id);
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
