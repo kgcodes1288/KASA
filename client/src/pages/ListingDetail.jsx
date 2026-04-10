@@ -947,7 +947,8 @@ export default function ListingDetail() {
                           <div key={`my-${item.id}`}
                             style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                               opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                            {/* Content row */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                                   <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
@@ -981,33 +982,31 @@ export default function ListingDetail() {
                                   </div>
                                 )}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                                {!isDone && (
-                                  <button className="btn btn-secondary btn-sm"
-                                    style={{ fontSize: 11 }}
-                                    onClick={() => handleCompleteTask(item.id)}>
-                                    ✅ Mark complete
-                                  </button>
-                                )}
-                                {!isDone && (
-                                  <button className="btn btn-secondary btn-sm"
-                                    style={{ fontSize: 11 }}
-                                    onClick={() => setAssignMaintenanceModal(item)}>
-                                    ↗ Reassign
-                                  </button>
-                                )}
-                                {canManageTasks && (
-                                  <button className="btn btn-danger btn-sm"
-                                    style={{ fontSize: 11 }}
-                                    onClick={() => handleDeleteTask(item.id)}>
-                                    🗑
-                                  </button>
-                                )}
-                                <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
-                                  background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)', color: colorSet.color }}>
-                                  {TASK_STATUS_LABEL[item.status]}
-                                </span>
-                              </div>
+                              <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600, flexShrink: 0, marginLeft: 8,
+                                background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)', color: colorSet.color }}>
+                                {TASK_STATUS_LABEL[item.status]}
+                              </span>
+                            </div>
+                            {/* Action buttons row */}
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {!isDone && (
+                                <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}
+                                  onClick={() => handleCompleteTask(item.id)}>
+                                  ✅ Mark complete
+                                </button>
+                              )}
+                              {!isDone && (
+                                <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}
+                                  onClick={() => setAssignMaintenanceModal(item)}>
+                                  ↗ Reassign
+                                </button>
+                              )}
+                              {canManageTasks && (
+                                <button className="btn btn-danger btn-sm" style={{ fontSize: 11 }}
+                                  onClick={() => handleDeleteTask(item.id)}>
+                                  🗑
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -1178,7 +1177,8 @@ export default function ListingDetail() {
                     <div key={`maint-${item.id}`}
                       style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                         opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                      {/* Content row */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
@@ -1226,34 +1226,32 @@ export default function ListingDetail() {
                             </div>
                           )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                          {!isDone && (
-                            <>
-                              <button className="btn btn-secondary btn-sm"
-                                style={{ fontSize: 11 }}
-                                onClick={() => setAssignMaintenanceModal(item)}>
-                                👤 Assign
-                              </button>
-                              <button className="btn btn-secondary btn-sm"
-                                style={{ fontSize: 11 }}
-                                onClick={() => handleCompleteTask(item.id)}>
-                                ✅ Mark complete
-                              </button>
-                            </>
-                          )}
-                          {item.assignedBy?.id === currentUser?.id && (
-                            <button className="btn btn-danger btn-sm"
-                              style={{ fontSize: 11 }}
-                              onClick={() => handleDeleteTask(item.id)}>
-                              🗑
+                        <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99, flexShrink: 0, marginLeft: 8,
+                          fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
+                          color: colorSet.color }}>
+                          {TASK_STATUS_LABEL[item.status]}
+                        </span>
+                      </div>
+                      {/* Action buttons row */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {!isDone && (
+                          <>
+                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}
+                              onClick={() => setAssignMaintenanceModal(item)}>
+                              👤 Assign
                             </button>
-                          )}
-                          <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
-                            fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
-                            color: colorSet.color }}>
-                            {TASK_STATUS_LABEL[item.status]}
-                          </span>
-                        </div>
+                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}
+                              onClick={() => handleCompleteTask(item.id)}>
+                              ✅ Mark complete
+                            </button>
+                          </>
+                        )}
+                        {item.assignedBy?.id === currentUser?.id && (
+                          <button className="btn btn-danger btn-sm" style={{ fontSize: 11 }}
+                            onClick={() => handleDeleteTask(item.id)}>
+                            🗑
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
