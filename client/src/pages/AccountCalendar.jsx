@@ -17,10 +17,10 @@ const CONTRACTOR_COLOR = { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7' };
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Convert any date to midnight local time for comparison
+// Convert to midnight UTC for comparison (dates are stored as noon UTC)
 const toLocal = (d) => {
   const dt = new Date(d);
-  return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
 };
 
 export default function AccountCalendar() {
