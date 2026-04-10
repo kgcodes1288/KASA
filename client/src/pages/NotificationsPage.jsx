@@ -49,7 +49,23 @@ export default function NotificationsPage() {
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Notifications</h1>
+        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Notifications</h1>
+        {notifications.length > 0 && (
+          <button
+            onClick={async () => {
+              setNotifications([]);
+              await api.delete('/notifications').catch(() => {});
+              refresh();
+            }}
+            style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+              fontSize: 13, color: 'var(--ink-secondary)',
+            }}
+          >
+            Clear all
+          </button>
+        )}
       </div>
 
       {loading && (
