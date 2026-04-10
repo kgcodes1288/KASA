@@ -1,5 +1,5 @@
 const prisma = require('./prisma');
-const { sendNotificationEmail } = require('./email');
+const { sendNotificationEmail, sendCleaningDigestEmail, sendCleaningReminderEmail } = require('./email');
 
 const APP_URL = process.env.CLIENT_URL || 'https://getcleanstays.com';
 
@@ -97,4 +97,113 @@ async function notifyListingMembers(listingId, type, title, message, excludeUser
   }
 }
 
-module.exports = { notify, notifyListingMembers };
+/**
+ * Send one digest notification + email for all newly created cleaning jobs in a sync run.
+ * newJobs: [{ checkoutDate, roomCount }]
+ */
+async function notifyCleaningDigest(listingId, newJobs) {
+  if (!newJobs.length) return;
+  try {
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: { coHosts: { where: { status: 'ACCEPTED' }, select: { userId: true } } },
+    });
+    if (!listing) return;
+
+    const ids = [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+    if (!ids.length) return;
+
+    const title   = `${newJobs.length} new cleaning job${newJobs.length !== 1 ? 's' : ''} added`;
+    const message = `${newJobs.length} new checkout${newJobs.length !== 1 ? 's' : ''} synced for ${listing.name}`;
+
+    await prisma.notification.createMany({
+      data: ids.map((userId) => ({ userId, type: 'JOB_CREATED', title, message, listingId })),
+    });
+
+    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, name: true } });
+    await Promise.allSettled(users.map((u) =>
+      u.email ? sendCleaningDigestEmail({
+        toEmail: u.email, toName: u.name,
+        listingName: listing.name, listingId,
+        jobs: newJobs,
+      }) : Promise.resolve()
+    ));
+  } catch (err) {
+    console.error('[notifyCleaningDigest]', err.message);
+  }
+}
+
+/**
+ * Send reminder notifications + emails for jobs checking out today.
+ * Called by the hourly poller.
+ */
+async function sendDayOfReminders() {
+  try {
+    const todayStart = new Date(); todayStart.setUTCHours(0,0,0,0);
+    const todayEnd   = new Date(); todayEnd.setUTCHours(23,59,59,999);
+
+    // Find all pending/in-progress jobs checking out today that haven't had a reminder sent
+    const jobs = await prisma.job.findMany({
+      where: {
+        checkoutDate:   { gte: todayStart, lte: todayEnd },
+        reminderSentAt: null,
+        status:         { not: 'completed' },
+      },
+      include: {
+        listing: {
+          include: { coHosts: { where: { status: 'ACCEPTED' }, select: { userId: true } } },
+        },
+        room: { select: { name: true } },
+      },
+    });
+
+    if (!jobs.length) return;
+
+    // Group by listing
+    const byListing = {};
+    jobs.forEach((j) => {
+      if (!byListing[j.listingId]) byListing[j.listingId] = { listing: j.listing, jobs: [] };
+      byListing[j.listingId].jobs.push(j);
+    });
+
+    for (const { listing, jobs: listingJobs } of Object.values(byListing)) {
+      // Group by checkoutDate to get room count per date
+      const byDate = {};
+      listingJobs.forEach((j) => {
+        const key = j.checkoutDate.toISOString();
+        if (!byDate[key]) byDate[key] = { checkoutDate: j.checkoutDate, roomCount: 0 };
+        byDate[key].roomCount++;
+      });
+      const jobSummary = Object.values(byDate);
+
+      const ids = [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+      const title   = `🔔 Cleaning reminder — checkout today`;
+      const message = `${jobSummary.length > 1 ? `${jobSummary.length} checkouts` : 'A checkout'} today at ${listing.name}`;
+
+      await prisma.notification.createMany({
+        data: ids.map((userId) => ({ userId, type: 'JOB_CREATED', title, message, listingId: listing.id })),
+      });
+
+      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { email: true, name: true } });
+      await Promise.allSettled(users.map((u) =>
+        u.email ? sendCleaningReminderEmail({
+          toEmail: u.email, toName: u.name,
+          listingName: listing.name, listingId: listing.id,
+          jobs: jobSummary,
+        }) : Promise.resolve()
+      ));
+
+      // Mark all these jobs as reminder sent
+      await prisma.job.updateMany({
+        where: { id: { in: listingJobs.map((j) => j.id) } },
+        data:  { reminderSentAt: new Date() },
+      });
+
+      console.log(`[notify] Reminder sent for ${listing.name} — ${jobSummary.length} checkout(s) today`);
+    }
+  } catch (err) {
+    console.error('[sendDayOfReminders]', err.message);
+  }
+}
+
+module.exports = { notify, notifyListingMembers, notifyCleaningDigest, sendDayOfReminders };

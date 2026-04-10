@@ -194,4 +194,123 @@ async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl
   console.log(`[email] Invite sent to ${toEmail} id=${result.data?.id}`);
 }
 
-module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail };
+/**
+ * Send a digest email for newly created cleaning jobs (one email per sync, per listing).
+ * jobs: [{ checkoutDate, roomCount }]
+ */
+async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId, jobs }) {
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[email] sendCleaningDigestEmail skipped — RESEND_API_KEY not set');
+    return;
+  }
+
+  const actionUrl = `${APP_URL}/listings/${listingId}?tab=jobs`;
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+
+  const rows = jobs.map((j) => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;">📅 ${fmt(j.checkoutDate)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#6b7280;">${j.roomCount} room${j.roomCount !== 1 ? 's' : ''}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0d9488;padding:24px 32px;">
+          <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">🧹 CleanStay</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">${jobs.length} new cleaning job${jobs.length !== 1 ? 's' : ''} added</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+            The following checkout dates were synced for <strong>${listingName}</strong>:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Checkout Date</th>
+                <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Rooms</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <a href="${actionUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            View Jobs
+          </a>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            You're receiving this because you manage <a href="${actionUrl}" style="color:#0d9488;text-decoration:none;">${listingName}</a> on CleanStay.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: [toEmail],
+    subject: `${jobs.length} new cleaning job${jobs.length !== 1 ? 's' : ''} added — ${listingName}`,
+    html,
+  });
+
+  if (result.error) throw new Error(result.error.message);
+  console.log(`[email] Cleaning digest sent to ${toEmail} (${jobs.length} jobs)`);
+}
+
+/**
+ * Send a same-day reminder email for jobs checking out today.
+ * jobs: [{ checkoutDate, roomCount }]
+ */
+async function sendCleaningReminderEmail({ toEmail, toName, listingName, listingId, jobs }) {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const actionUrl = `${APP_URL}/listings/${listingId}?tab=jobs`;
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+  const jobList = jobs.map((j) => `<li style="margin-bottom:6px;font-size:14px;color:#111827;">📅 ${fmt(j.checkoutDate)} — ${j.roomCount} room${j.roomCount !== 1 ? 's' : ''}</li>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0d9488;padding:24px 32px;">
+          <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">🧹 CleanStay</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">🔔 Cleaning reminder for today</p>
+          <p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">
+            You have ${jobs.length > 1 ? `${jobs.length} checkouts` : 'a checkout'} today at <strong>${listingName}</strong>:
+          </p>
+          <ul style="margin:0 0 24px;padding-left:20px;">${jobList}</ul>
+          <a href="${actionUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            View Jobs
+          </a>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            Sent via <a href="${APP_URL}" style="color:#0d9488;text-decoration:none;">CleanStay</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: [toEmail],
+    subject: `🔔 Cleaning reminder today — ${listingName}`,
+    html,
+  });
+
+  if (result.error) throw new Error(result.error.message);
+  console.log(`[email] Reminder sent to ${toEmail} for ${listingName}`);
+}
+
+module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail, sendCleaningDigestEmail, sendCleaningReminderEmail };

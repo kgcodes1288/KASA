@@ -156,17 +156,18 @@ model ChecklistTemplate {
 }
 
 model Job {
-  id           String    @id @default(cuid())
-  guestName    String    @default("Airbnb Guest")
-  checkoutDate DateTime
-  checkinDate  DateTime?
-  status       JobStatus @default(pending)
-  smsSent      Boolean   @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  listingId    String
-  roomId       String
-  cleanerId    String?
+  id             String    @id @default(cuid())
+  guestName      String    @default("Airbnb Guest")
+  checkoutDate   DateTime
+  checkinDate    DateTime?
+  status         JobStatus @default(pending)
+  smsSent        Boolean   @default(false)
+  reminderSentAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  listingId      String
+  roomId         String
+  cleanerId      String?
 
   listing        Listing        @relation(fields: [listingId], references: [id], onDelete: Cascade)
   room           Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
