@@ -91,7 +91,7 @@ export default function AccountCalendar() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   const getDayInfo = (day) => {
-    const d = new Date(year, month, day);
+    const d = new Date(Date.UTC(year, month, day));  // must match toLocal() UTC midnight
     const dTime = d.getTime();
     let isStay = false;
     let isCheckout = false;
