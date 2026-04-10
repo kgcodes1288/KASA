@@ -1040,66 +1040,55 @@ export default function ListingDetail() {
                         style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                           opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
 
+                        {/* ── Top row: title + date | status badge + assign button ── */}
                         <div style={{ display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 13, fontWeight: 700 }}>🧹 Checkout Clean</span>
-                              {item.guestName && (
-                                <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.guestName}</span>
-                              )}
-                            </div>
-                            <p style={{ fontSize: 12 }}>
+                          alignItems: 'center', marginBottom: activeToken && !isDone ? 8 : 10 }}>
+                          <div>
+                            <span style={{ fontSize: 13, fontWeight: 700 }}>🧹 Checkout Clean</span>
+                            <p style={{ fontSize: 12, marginTop: 3 }}>
                               📅 {new Date(item.date).toLocaleDateString(undefined, {
                                 weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
                               })}
                             </p>
                           </div>
-
-                          {/* Right side: status badge + assign/withdraw controls */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
-                            {/* Job status badge */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                             <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
                               fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
                               color: colorSet.color }}>
                               {STATUS_LABEL[aggStatus]}
                             </span>
-
-                            {/* Assignment status badge */}
-                            {/* Assignment status badge */}
-                            {activeToken && !isDone && (
-                              <span style={{
-                                fontSize: 11, padding: '3px 9px', borderRadius: 99, fontWeight: 600,
-                                ...TOKEN_STATUS_STYLE[activeToken.status],
-                              }}>
-                                {TOKEN_STATUS_LABEL[activeToken.status]}
-                                {activeToken.contractorName ? ` · ${activeToken.contractorName}` : ''}
-                              </span>
-                            )}
-
-                            {/* Withdraw button */}
-                            {activeToken && !isDone && (
-                              <button
-                                className="btn btn-danger btn-sm"
-                                onClick={() => handleWithdraw(activeToken.token, dateKey)}
-                                disabled={isWithdrawing}
-                                style={{ fontSize: 11, whiteSpace: 'nowrap' }}
-                              >
-                                {isWithdrawing ? 'Withdrawing…' : 'Withdraw'}
-                              </button>
-                            )}
-
-                            {/* Assign button — hidden if already assigned or done */}
                             {!activeToken && !isDone && (
                               <button
                                 className="btn btn-secondary btn-sm"
                                 onClick={() => setSendLinkModal({ checkoutDate: item.date })}
-                                style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                                style={{ fontSize: 11 }}>
                                 📲 Assign
                               </button>
                             )}
                           </div>
                         </div>
+
+                        {/* ── Assignment row: only shown when assigned ── */}
+                        {activeToken && !isDone && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8,
+                            flexWrap: 'wrap', marginBottom: 10,
+                            padding: '6px 10px', borderRadius: 8,
+                            background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                            <span style={{ flex: 1, fontSize: 11, fontWeight: 600,
+                              ...TOKEN_STATUS_STYLE[activeToken.status],
+                              padding: '3px 9px', borderRadius: 99 }}>
+                              {TOKEN_STATUS_LABEL[activeToken.status]}
+                              {activeToken.contractorName ? ` · ${activeToken.contractorName}` : ''}
+                            </span>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleWithdraw(activeToken.token, dateKey)}
+                              disabled={isWithdrawing}
+                              style={{ fontSize: 11 }}>
+                              {isWithdrawing ? 'Withdrawing…' : 'Withdraw'}
+                            </button>
+                          </div>
+                        )}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {item.rooms.map((r) => {
