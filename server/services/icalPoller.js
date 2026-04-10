@@ -1,7 +1,7 @@
 const ical = require('node-ical');
 const cron = require('node-cron');
 const prisma = require('../lib/prisma');
-const { notifyListingMembers } = require('../lib/notify');
+const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
 
 async function syncListing(listing) {
   try {
@@ -20,15 +20,20 @@ async function syncListing(listing) {
       return;
     }
 
+    // iCal all-day dates are midnight UTC — normalize to noon UTC so
+    // no timezone offset can shift the display date to the previous day
+    const toNoonUTC = (d) => { const n = new Date(d); n.setUTCHours(12,0,0,0); return n; };
+
+    // Track newly created jobs for digest (keyed by checkoutDate ISO string)
+    const newJobsByDate = {};
+
     for (const event of Object.values(events)) {
       if (event.type !== 'VEVENT') continue;
-      // iCal all-day dates are midnight UTC — normalize to noon UTC so
-      // no timezone offset can shift the display date to the previous day
-      const toNoonUTC = (d) => { const n = new Date(d); n.setUTCHours(12,0,0,0); return n; };
       const checkoutDate = event.end   ? toNoonUTC(event.end)   : null;
       const checkinDate  = event.start ? toNoonUTC(event.start) : null;
       if (!checkoutDate || checkoutDate < cutoff) continue;
 
+      let createdCount = 0;
       for (const room of rooms) {
         const existing = await prisma.job.findFirst({
           where: { listingId: listing.id, roomId: room.id, checkoutDate },
@@ -49,17 +54,21 @@ async function syncListing(listing) {
             },
           },
         });
-
-        const dateStr = checkoutDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        await notifyListingMembers(
-          listing.id,
-          'JOB_CREATED',
-          'New cleaning job',
-          `New cleaning job added for ${listing.name} — checkout ${dateStr}`
-        );
-
+        createdCount++;
         console.log(`[iCal] Created job for room "${room.name}" — checkout ${checkoutDate}`);
       }
+
+      if (createdCount > 0) {
+        const key = checkoutDate.toISOString();
+        newJobsByDate[key] = { checkoutDate, roomCount: (newJobsByDate[key]?.roomCount || 0) + createdCount };
+      }
+    }
+
+    // Send ONE digest notification + email for all new jobs from this sync
+    const newJobsSummary = Object.values(newJobsByDate);
+    if (newJobsSummary.length > 0) {
+      await notifyCleaningDigest(listing.id, newJobsSummary);
+      console.log(`[iCal] Digest sent for ${listing.name} — ${newJobsSummary.length} new checkout date(s)`);
     }
 
     await prisma.listing.update({ where: { id: listing.id }, data: { lastSynced: new Date() } });
@@ -76,6 +85,7 @@ function startPoller() {
     try {
       const listings = await prisma.listing.findMany();
       for (const listing of listings) await syncListing(listing);
+      await sendDayOfReminders();
     } catch (err) {
       console.error('[iCal] Poller error:', err.message);
     }
