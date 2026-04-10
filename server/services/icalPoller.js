@@ -80,8 +80,8 @@ async function syncListing(listing) {
 }
 
 function startPoller() {
-  cron.schedule('0 * * * *', async () => {
-    console.log('[iCal] Running hourly sync...');
+  cron.schedule('0 */12 * * *', async () => {
+    console.log('[iCal] Running 12-hour sync...');
     try {
       const listings = await prisma.listing.findMany();
       for (const listing of listings) await syncListing(listing);
@@ -90,7 +90,7 @@ function startPoller() {
       console.error('[iCal] Poller error:', err.message);
     }
   });
-  console.log('[iCal] Poller started — runs every hour');
+  console.log('[iCal] Poller started — runs every 12 hours');
 }
 
 module.exports = { startPoller, syncListing };
