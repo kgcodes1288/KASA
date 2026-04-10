@@ -54,6 +54,22 @@ function NotificationsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+        <button
+          onClick={async () => {
+            setNotifications([]);
+            await api.delete('/notifications').catch(() => {});
+            refresh();
+          }}
+          style={{
+            background: 'none', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+            fontSize: 13, color: 'var(--ink-secondary)',
+          }}
+        >
+          Clear all
+        </button>
+      </div>
       {notifications.map((n) => {
         const inner = (
           <>
