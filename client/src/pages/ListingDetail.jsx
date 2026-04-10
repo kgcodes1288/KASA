@@ -908,9 +908,9 @@ export default function ListingDetail() {
 
         return (
           <>
-            <div className="section-header">
+            <div className="section-header" style={{ flexWrap: 'wrap', gap: 8 }}>
               <h2>All Jobs</h2>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 12, height: 12, borderRadius: 3, background: '#bfdbfe', display: 'inline-block' }} />
                   Cleaning
@@ -947,7 +947,7 @@ export default function ListingDetail() {
                           <div key={`my-${item.id}`}
                             style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                               opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                                   <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
@@ -981,7 +981,7 @@ export default function ListingDetail() {
                                   </div>
                                 )}
                               </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 10, flexShrink: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                                 {!isDone && (
                                   <button className="btn btn-secondary btn-sm"
                                     style={{ fontSize: 11 }}
@@ -1041,9 +1041,9 @@ export default function ListingDetail() {
                           opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
 
                         <div style={{ display: 'flex', justifyContent: 'space-between',
-                          alignItems: 'flex-start', marginBottom: 10 }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          alignItems: 'flex-start', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 13, fontWeight: 700 }}>🧹 Checkout Clean</span>
                               {item.guestName && (
                                 <span style={{ fontSize: 12, fontWeight: 400 }}>— {item.guestName}</span>
@@ -1057,7 +1057,7 @@ export default function ListingDetail() {
                           </div>
 
                           {/* Right side: status badge + assign/withdraw controls */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
                             {/* Job status badge */}
                             <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 99,
                               fontWeight: 600, background: isDone ? 'rgba(0,0,0,0.06)' : 'rgba(0,0,0,0.08)',
@@ -1189,7 +1189,7 @@ export default function ListingDetail() {
                     <div key={`maint-${item.id}`}
                       style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
                         opacity: isDone ? 0.7 : 1, transition: 'opacity 0.2s' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 13, fontWeight: 700 }}>{taskIcon} {item.roomName}</span>
@@ -1237,7 +1237,7 @@ export default function ListingDetail() {
                             </div>
                           )}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                           {!isDone && (
                             <>
                               <button className="btn btn-secondary btn-sm"
