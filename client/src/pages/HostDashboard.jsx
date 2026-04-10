@@ -36,22 +36,22 @@ function MiniCalendar({ jobs }) {
   const prevMonth = () => setCurrent(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrent(new Date(year, month + 1, 1));
 
+  // Use UTC methods so dates stored as noon UTC aren't shifted by local timezone
+  const utcKey = (d) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+
   const dateMap = {};
   jobs.forEach((job) => {
     const checkout = job.checkoutDate ? new Date(job.checkoutDate) : null;
-    const checkin = job.checkinDate ? new Date(job.checkinDate) : null;
+    const checkin  = job.checkinDate  ? new Date(job.checkinDate)  : null;
 
-    if (checkout) {
-      const key = `${checkout.getFullYear()}-${checkout.getMonth()}-${checkout.getDate()}`;
-      dateMap[key] = 'checkout';
-    }
+    if (checkout) dateMap[utcKey(checkout)] = 'checkout';
 
     if (checkin && checkout) {
-      const d = new Date(checkin);
-      while (d < checkout) {
-        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-        if (!dateMap[key]) dateMap[key] = 'booked';
-        d.setDate(d.getDate() + 1);
+      const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate()));
+      const end = Date.UTC(checkout.getUTCFullYear(), checkout.getUTCMonth(), checkout.getUTCDate());
+      while (d.getTime() < end) {
+        if (!dateMap[utcKey(d)]) dateMap[utcKey(d)] = 'booked';
+        d.setUTCDate(d.getUTCDate() + 1);
       }
     }
   });

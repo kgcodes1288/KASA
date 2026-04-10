@@ -513,6 +513,12 @@ export default function ListingDetail() {
   const [coHosts, setCoHosts]                     = useState([]);
   const [assignMaintenanceModal, setAssignMaintenanceModal] = useState(null);
 
+  // Jobs tab filters
+  const [showOldJobs, setShowOldJobs]   = useState(false);
+  const [filterType, setFilterType]     = useState('all');   // 'all' | 'cleaning' | 'maintenance'
+  const [filterRoom, setFilterRoom]     = useState('');
+  const [filterStatus, setFilterStatus] = useState('');      // '' | 'pending' | 'in_progress' | 'completed' | 'COMPLETED'
+
   const load = async () => {
     setLoading(true);
     try {
@@ -883,9 +889,39 @@ export default function ListingDetail() {
           return 'pending';
         };
 
-        const sorted = [...cleaningGroups, ...maintItems].sort(
+        // Yesterday cutoff — hide jobs older than 1 day unless showOldJobs is on
+        const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1); yesterday.setHours(0,0,0,0);
+        const isOld = (item) => item.date && new Date(item.date) < yesterday;
+
+        const allSorted = [...cleaningGroups, ...maintItems].sort(
           (a, b) => new Date(a.date) - new Date(b.date)
         );
+
+        // Unique room names for filter dropdown
+        const roomNames = [...new Set([
+          ...cleaningGroups.flatMap((g) => g.rooms.map((r) => r.roomName)),
+          ...maintItems.map((t) => t.roomName),
+        ])].filter(Boolean).sort();
+
+        // Apply filters
+        const applyFilters = (items) => items.filter((item) => {
+          if (!showOldJobs && isOld(item)) return false;
+          if (filterType === 'cleaning' && item._type !== 'cleaning_group') return false;
+          if (filterType === 'maintenance' && item._type !== 'maintenance') return false;
+          if (filterRoom) {
+            if (item._type === 'cleaning_group' && !item.rooms.some((r) => r.roomName === filterRoom)) return false;
+            if (item._type === 'maintenance' && item.roomName !== filterRoom) return false;
+          }
+          if (filterStatus) {
+            if (item._type === 'cleaning_group' && groupStatus(item.rooms) !== filterStatus) return false;
+            if (item._type === 'maintenance' && item.status !== filterStatus.toUpperCase()) return false;
+          }
+          return true;
+        });
+
+        const sorted = applyFilters(allSorted);
+        const hiddenCount = allSorted.filter(isOld).length;
+
         const isMyTask = (i) => i._type === 'maintenance' && (
           i.assignedUser?.id === currentUser?.id ||
           (!i.assignedUser && i.assignedBy?.id === currentUser?.id)
@@ -906,27 +942,63 @@ export default function ListingDetail() {
           done:   { background: '#fafaf9', border: '1px solid #e7e5e4', color: '#a8a29e' },
         };
 
+        const selStyle = {
+          padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)',
+          fontSize: 12, background: 'var(--bg-card)', color: 'var(--ink)',
+          fontFamily: 'var(--font-body)', cursor: 'pointer',
+        };
+
         return (
           <>
-            <div className="section-header" style={{ flexWrap: 'wrap', gap: 8 }}>
-              <h2>All Jobs</h2>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 3, background: '#bfdbfe', display: 'inline-block' }} />
-                  Cleaning
-                </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 12, height: 12, borderRadius: 3, background: '#fde68a', display: 'inline-block' }} />
-                  Maintenance
-                </span>
+            {/* ── Header + filters ── */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="section-header" style={{ marginBottom: 12 }}>
+                <h2>All Jobs</h2>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select style={selStyle} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                    <option value="all">All types</option>
+                    <option value="cleaning">🧹 Cleaning only</option>
+                    <option value="maintenance">🔧 Maintenance only</option>
+                  </select>
+                  {roomNames.length > 0 && (
+                    <select style={selStyle} value={filterRoom} onChange={(e) => setFilterRoom(e.target.value)}>
+                      <option value="">All rooms</option>
+                      {roomNames.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  )}
+                  <select style={selStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                    <option value="">All statuses</option>
+                    <option value="pending">⏳ Pending</option>
+                    <option value="in_progress">🧹 In progress</option>
+                    <option value="completed">✅ Done</option>
+                  </select>
+                </div>
               </div>
+              {hiddenCount > 0 && (
+                <button
+                  onClick={() => setShowOldJobs((v) => !v)}
+                  style={{
+                    background: 'none', border: '1px dashed var(--border)', borderRadius: 8,
+                    padding: '6px 14px', fontSize: 12, color: 'var(--ink-soft)',
+                    cursor: 'pointer', fontFamily: 'var(--font-body)',
+                  }}
+                >
+                  {showOldJobs ? '🙈 Hide past jobs' : `📂 Show ${hiddenCount} past job${hiddenCount !== 1 ? 's' : ''}`}
+                </button>
+              )}
             </div>
 
-            {sorted.length === 0 ? (
+            {allSorted.length === 0 ? (
               <div className="empty-state">
                 <div style={{ fontSize: 32 }}>📋</div>
                 <h3>No jobs yet</h3>
                 <p>Sync your iCal to generate cleaning jobs or add maintenance tasks</p>
+              </div>
+            ) : sorted.length === 0 ? (
+              <div className="empty-state" style={{ padding: '32px 0' }}>
+                <div style={{ fontSize: 28 }}>🔍</div>
+                <h3>No jobs match your filters</h3>
+                <p style={{ fontSize: 13 }}>Try adjusting the filters or showing past jobs</p>
               </div>
             ) : (
               <>
