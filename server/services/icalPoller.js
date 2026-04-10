@@ -22,8 +22,11 @@ async function syncListing(listing) {
 
     for (const event of Object.values(events)) {
       if (event.type !== 'VEVENT') continue;
-      const checkoutDate = event.end ? new Date(event.end) : null;
-      const checkinDate = event.start ? new Date(event.start) : null;
+      // iCal all-day dates are midnight UTC — normalize to noon UTC so
+      // no timezone offset can shift the display date to the previous day
+      const toNoonUTC = (d) => { const n = new Date(d); n.setUTCHours(12,0,0,0); return n; };
+      const checkoutDate = event.end   ? toNoonUTC(event.end)   : null;
+      const checkinDate  = event.start ? toNoonUTC(event.start) : null;
       if (!checkoutDate || checkoutDate < cutoff) continue;
 
       for (const room of rooms) {

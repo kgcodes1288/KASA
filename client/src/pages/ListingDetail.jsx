@@ -786,8 +786,8 @@ export default function ListingDetail() {
                                             )}
                                             <p style={{ fontSize: 11, color: '#b45309' }}>
                                               Every {task.intervalMonths}mo
-                                              {task.lastServicedAt && ` · Last: ${new Date(task.lastServicedAt).toLocaleDateString()}`}
-                                              {' · Next: '}<strong>{new Date(task.nextDueAt).toLocaleDateString()}</strong>
+                                              {task.lastServicedAt && ` · Last: ${new Date(task.lastServicedAt).toLocaleDateString(undefined, { timeZone: 'UTC' })}`}
+                                              {' · Next: '}<strong>{new Date(task.nextDueAt).toLocaleDateString(undefined, { timeZone: 'UTC' })}</strong>
                                             </p>
                                           </div>
                                           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
@@ -955,7 +955,7 @@ export default function ListingDetail() {
                                   <span style={{ fontSize: 12 }}>— {item.title}</span>
                                 </div>
                                 <p style={{ fontSize: 12, marginBottom: 2 }}>
-                                  📅 {new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                  📅 {new Date(item.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' })}
                                 </p>
                                 {item.paymentAmount && <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>💵 {item.paymentAmount}</p>}
                                 {item.notes && <p style={{ fontSize: 12, marginBottom: 2 }}>{item.notes}</p>}
@@ -1046,7 +1046,7 @@ export default function ListingDetail() {
                             <span style={{ fontSize: 13, fontWeight: 700 }}>🧹 Checkout Clean</span>
                             <p style={{ fontSize: 12, marginTop: 3 }}>
                               📅 {new Date(item.date).toLocaleDateString(undefined, {
-                                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                                weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
                               })}
                             </p>
                           </div>
@@ -1186,7 +1186,7 @@ export default function ListingDetail() {
                           </div>
                           <p style={{ fontSize: 12, marginBottom: 2 }}>
                             📅 {new Date(item.date).toLocaleDateString(undefined, {
-                              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                              weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
                             })}
                           </p>
                           {item.paymentAmount && (

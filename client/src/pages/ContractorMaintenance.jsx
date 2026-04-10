@@ -103,7 +103,7 @@ export default function ContractorMaintenance() {
           )}
           <p style={{ fontSize: 13, color: '#64748b', marginTop: 8 }}>
             📅 Due: {new Date(data.nextDueAt).toLocaleDateString('en-US', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
             })}
           </p>
         </div>

@@ -59,12 +59,12 @@ export default function JobDetail() {
           </div>
           <div>
             <span style={{ color: 'var(--ink-ghost)' }}>Checkout</span>
-            <p style={{ fontWeight: 500 }}>{new Date(job.checkoutDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+            <p style={{ fontWeight: 500 }}>{new Date(job.checkoutDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}</p>
           </div>
           {job.checkinDate && (
             <div>
               <span style={{ color: 'var(--ink-ghost)' }}>Next check-in</span>
-              <p style={{ fontWeight: 500 }}>{new Date(job.checkinDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+              <p style={{ fontWeight: 500 }}>{new Date(job.checkinDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })}</p>
             </div>
           )}
           {job.cleaner && (
