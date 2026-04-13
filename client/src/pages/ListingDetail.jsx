@@ -487,6 +487,71 @@ const TOKEN_STATUS_LABEL = {
   ACCEPTED: '✅ Accepted',
 };
 
+/* ── Listing Settings Modal ── */
+function ListingSettingsModal({ listing, onClose, onSaved }) {
+  const [members, setMembers]               = useState([]);
+  const [defaultCleanerId, setDefaultCleanerId] = useState(listing.defaultCleanerId || '');
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState('');
+
+  useEffect(() => {
+    api.get(`/listings/${listing.id}/members`)
+      .then(({ data }) => setMembers(data))
+      .catch(() => {});
+  }, [listing.id]);
+
+  const handleSave = async () => {
+    setSaving(true); setError('');
+    try {
+      const { data } = await api.put(`/listings/${listing.id}`, {
+        defaultCleanerId: defaultCleanerId || null,
+      });
+      onSaved(data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <div className="modal-header">
+          <h3>⚙️ Listing Settings</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
+
+        <div className="form-group">
+          <label style={{ fontWeight: 600, fontSize: 14 }}>Default assignee for new cleaning jobs</label>
+          <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 4, marginBottom: 10 }}>
+            When new bookings are synced from Airbnb, jobs will be auto-assigned to this person.
+          </p>
+          <select
+            className="input"
+            value={defaultCleanerId}
+            onChange={(e) => setDefaultCleanerId(e.target.value)}
+          >
+            <option value="">Unassigned (assign manually)</option>
+            {members.map((m) => (
+              <option key={m.id} value={m.id}>{m.name} — {m.role}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save settings'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main component ── */
 export default function ListingDetail() {
   const { user: currentUser } = useAuth();
@@ -512,6 +577,7 @@ export default function ListingDetail() {
 
   const [coHosts, setCoHosts]                     = useState([]);
   const [assignMaintenanceModal, setAssignMaintenanceModal] = useState(null);
+  const [settingsModal, setSettingsModal]         = useState(false);
 
   // Jobs tab filters
   const [showOldJobs, setShowOldJobs]   = useState(false);
@@ -665,11 +731,24 @@ export default function ListingDetail() {
         <Link to="/host" style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>← Back to listings</Link>
       </div>
 
-      <div className="section-header">
-        <div>
+      <div className="section-header" style={{ alignItems: 'flex-start' }}>
+        <div style={{ flex: 1 }}>
           <h1>{listing.name}</h1>
           {listing.address && <p>📍 {listing.address}</p>}
         </div>
+        {canManageTasks && (
+          <button
+            onClick={() => setSettingsModal(true)}
+            title="Listing settings"
+            style={{
+              background: 'none', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
+              fontSize: 16, color: 'var(--ink-secondary)', flexShrink: 0,
+            }}
+          >
+            ⚙️
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1367,6 +1446,14 @@ export default function ListingDetail() {
           contractors={contractors}
           currentUserId={currentUser?.id}
           onClose={() => { setAssignMaintenanceModal(null); loadMaintenance(); }}
+        />
+      )}
+
+      {settingsModal && listing && (
+        <ListingSettingsModal
+          listing={listing}
+          onClose={() => setSettingsModal(false)}
+          onSaved={(updated) => { setListing(updated); setSettingsModal(false); }}
         />
       )}
     </div>
