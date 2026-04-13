@@ -28,17 +28,18 @@ async function notify(userId, type, title, message, listingId = null) {
 
   // Send email (non-blocking — don't let email failure affect the response)
   try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
-    if (user?.email) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
+    if (user?.email && !user.emailUnsubscribed) {
       const actionUrl = listingId ? `${APP_URL}/listings/${listingId}?tab=jobs` : `${APP_URL}/account`;
       await sendNotificationEmail({
-        to:          user.email,
-        toName:      user.name,
-        subject:     EMAIL_SUBJECT[type] || title,
+        to:               user.email,
+        toName:           user.name,
+        subject:          EMAIL_SUBJECT[type] || title,
         title,
         message,
         actionUrl,
-        actionLabel: 'View on CleanStay',
+        actionLabel:      'View on CleanStay',
+        unsubscribeToken: user.unsubscribeToken,
       });
     }
   } catch (err) {
@@ -78,18 +79,19 @@ async function notifyListingMembers(listingId, type, title, message, excludeUser
     // Send emails to each recipient (non-blocking)
     const users = await prisma.user.findMany({
       where: { id: { in: unique } },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true },
     });
     const actionUrl = `${APP_URL}/listings/${listingId}?tab=jobs`;
     await Promise.allSettled(users.map((u) =>
-      u.email ? sendNotificationEmail({
-        to:          u.email,
-        toName:      u.name,
-        subject:     EMAIL_SUBJECT[type] || title,
+      u.email && !u.emailUnsubscribed ? sendNotificationEmail({
+        to:               u.email,
+        toName:           u.name,
+        subject:          EMAIL_SUBJECT[type] || title,
         title,
         message,
         actionUrl,
-        actionLabel: 'View on CleanStay',
+        actionLabel:      'View on CleanStay',
+        unsubscribeToken: u.unsubscribeToken,
       }) : Promise.resolve()
     ));
   } catch (err) {
@@ -120,12 +122,13 @@ async function notifyCleaningDigest(listingId, newJobs) {
       data: ids.map((userId) => ({ userId, type: 'JOB_CREATED', title, message, listingId })),
     });
 
-    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, name: true } });
+    const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
     await Promise.allSettled(users.map((u) =>
-      u.email ? sendCleaningDigestEmail({
+      u.email && !u.emailUnsubscribed ? sendCleaningDigestEmail({
         toEmail: u.email, toName: u.name,
         listingName: listing.name, listingId,
         jobs: newJobs,
+        unsubscribeToken: u.unsubscribeToken,
       }) : Promise.resolve()
     ));
   } catch (err) {
@@ -184,12 +187,13 @@ async function sendDayOfReminders() {
         data: ids.map((userId) => ({ userId, type: 'JOB_CREATED', title, message, listingId: listing.id })),
       });
 
-      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { email: true, name: true } });
+      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
       await Promise.allSettled(users.map((u) =>
-        u.email ? sendCleaningReminderEmail({
+        u.email && !u.emailUnsubscribed ? sendCleaningReminderEmail({
           toEmail: u.email, toName: u.name,
           listingName: listing.name, listingId: listing.id,
           jobs: jobSummary,
+          unsubscribeToken: u.unsubscribeToken,
         }) : Promise.resolve()
       ));
 
