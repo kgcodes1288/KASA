@@ -70,7 +70,7 @@ async function syncListing(listing) {
     sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6);
     const newJobsSummary = Object.values(newJobsByDate).filter((j) => j.checkoutDate <= sixMonthsOut);
     if (newJobsSummary.length > 0) {
-      await notifyCleaningDigest(listing.id, newJobsSummary);
+      await notifyCleaningDigest(listing.id, newJobsSummary, listing.defaultCleanerId || null);
       console.log(`[iCal] Digest sent for ${listing.name} — ${newJobsSummary.length} new checkout date(s)`);
     }
 
