@@ -65,7 +65,10 @@ async function syncListing(listing) {
     }
 
     // Send ONE digest notification + email for all new jobs from this sync
-    const newJobsSummary = Object.values(newJobsByDate);
+    // Skip jobs more than 6 months in the future (Airbnb calendars can show phantom future bookings)
+    const sixMonthsOut = new Date();
+    sixMonthsOut.setMonth(sixMonthsOut.getMonth() + 6);
+    const newJobsSummary = Object.values(newJobsByDate).filter((j) => j.checkoutDate <= sixMonthsOut);
     if (newJobsSummary.length > 0) {
       await notifyCleaningDigest(listing.id, newJobsSummary);
       console.log(`[iCal] Digest sent for ${listing.name} — ${newJobsSummary.length} new checkout date(s)`);

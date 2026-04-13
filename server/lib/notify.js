@@ -170,7 +170,7 @@ async function sendDayOfReminders() {
       // Group by checkoutDate to get room count per date
       const byDate = {};
       listingJobs.forEach((j) => {
-        const key = j.checkoutDate.toISOString();
+        const key = j.checkoutDate.toISOString().slice(0, 10); // YYYY-MM-DD, ignore time variation
         if (!byDate[key]) byDate[key] = { checkoutDate: j.checkoutDate, roomCount: 0 };
         byDate[key].roomCount++;
       });
