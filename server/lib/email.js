@@ -4,11 +4,19 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM   = process.env.RESEND_FROM || 'noreply@getcleanstays.com';
 
 const APP_URL = process.env.CLIENT_URL || 'https://getcleanstays.com';
+const API_URL = process.env.API_URL || process.env.RENDER_EXTERNAL_URL || 'https://kasa-workplanner.onrender.com';
+
+function unsubscribeFooter(token) {
+  const url = `${API_URL}/api/unsubscribe?token=${token}`;
+  return `<p style="margin:8px 0 0;font-size:11px;color:#9ca3af;">
+    <a href="${url}" style="color:#9ca3af;text-decoration:underline;">Unsubscribe</a> from CleanStay email notifications.
+  </p>`;
+}
 
 /**
  * Send a transactional notification email.
  */
-async function sendNotificationEmail({ to, toName, subject, title, message, actionUrl, actionLabel }) {
+async function sendNotificationEmail({ to, toName, subject, title, message, actionUrl, actionLabel, unsubscribeToken }) {
   if (!process.env.RESEND_API_KEY) return; // skip in dev if not configured
 
   const html = `
@@ -48,6 +56,7 @@ async function sendNotificationEmail({ to, toName, subject, title, message, acti
               You're receiving this because you have an account on
               <a href="${APP_URL}" style="color:#0d9488;text-decoration:none;">CleanStay</a>.
             </p>
+            ${unsubscribeToken ? unsubscribeFooter(unsubscribeToken) : ''}
           </td>
         </tr>
       </table>
@@ -198,7 +207,7 @@ async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl
  * Send a digest email for newly created cleaning jobs (one email per sync, per listing).
  * jobs: [{ checkoutDate, roomCount }]
  */
-async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId, jobs }) {
+async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId, jobs, unsubscribeToken }) {
   if (!process.env.RESEND_API_KEY) {
     console.error('[email] sendCleaningDigestEmail skipped — RESEND_API_KEY not set');
     return;
@@ -244,6 +253,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
           <p style="margin:0;font-size:12px;color:#9ca3af;">
             You're receiving this because you manage <a href="${actionUrl}" style="color:#0d9488;text-decoration:none;">${listingName}</a> on CleanStay.
           </p>
+          ${unsubscribeToken ? unsubscribeFooter(unsubscribeToken) : ''}
         </td></tr>
       </table>
     </td></tr>
@@ -265,7 +275,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
  * Send a same-day reminder email for jobs checking out today.
  * jobs: [{ checkoutDate, roomCount }]
  */
-async function sendCleaningReminderEmail({ toEmail, toName, listingName, listingId, jobs }) {
+async function sendCleaningReminderEmail({ toEmail, toName, listingName, listingId, jobs, unsubscribeToken }) {
   if (!process.env.RESEND_API_KEY) return;
 
   const actionUrl = `${APP_URL}/listings/${listingId}?tab=jobs`;
@@ -296,6 +306,7 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
           <p style="margin:0;font-size:12px;color:#9ca3af;">
             Sent via <a href="${APP_URL}" style="color:#0d9488;text-decoration:none;">CleanStay</a>
           </p>
+          ${unsubscribeToken ? unsubscribeFooter(unsubscribeToken) : ''}
         </td></tr>
       </table>
     </td></tr>

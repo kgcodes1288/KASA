@@ -15,8 +15,10 @@ model User {
   googleId  String?  @unique
   role      Role
   phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  emailUnsubscribed   Boolean  @default(false)
+  unsubscribeToken    String?  @unique @default(cuid())
 
   listings              Listing[]       @relation("HostListings")
   jobs                  Job[]
