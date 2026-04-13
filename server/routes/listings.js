@@ -64,12 +64,45 @@ router.put('/:id', auth, async (req, res) => {
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
     if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
-    const { name, address, icalUrl } = req.body;
+    const { name, address, icalUrl, defaultCleanerId } = req.body;
     const updated = await prisma.listing.update({
       where: { id: req.params.id },
-      data: { name, address, icalUrl },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(address !== undefined && { address }),
+        ...(icalUrl !== undefined && { icalUrl }),
+        ...('defaultCleanerId' in req.body && { defaultCleanerId: defaultCleanerId || null }),
+      },
     });
     res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/listings/:id/members — host + accepted co-hosts as User objects
+router.get('/:id/members', auth, async (req, res) => {
+  try {
+    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    if (!listing) return res.status(404).json({ message: 'Not found' });
+    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+
+    const host = await prisma.user.findUnique({
+      where: { id: listing.hostId },
+      select: { id: true, name: true, email: true },
+    });
+
+    const coHostLinks = await prisma.listingCoHost.findMany({
+      where: { listingId: req.params.id, status: 'ACCEPTED' },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    const members = [
+      { ...host, role: 'Host' },
+      ...coHostLinks.filter((c) => c.user).map((c) => ({ ...c.user, role: 'Co-host' })),
+    ];
+
+    res.json(members);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

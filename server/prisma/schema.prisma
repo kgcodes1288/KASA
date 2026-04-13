@@ -20,13 +20,14 @@ model User {
   emailUnsubscribed   Boolean  @default(false)
   unsubscribeToken    String?  @unique @default(cuid())
 
-  listings              Listing[]       @relation("HostListings")
-  jobs                  Job[]
-  coHosting             ListingCoHost[] @relation("CoHostUser")
-  maintenanceTasks      MaintenanceTask[]
-  assignedByTasks       MaintenanceTask[] @relation("TaskAssignedBy")
-  contractors           Contractor[]
-  notifications         Notification[]
+  listings                  Listing[]       @relation("HostListings")
+  defaultCleanerListings    Listing[]       @relation("ListingDefaultCleaner")
+  jobs                      Job[]
+  coHosting                 ListingCoHost[] @relation("CoHostUser")
+  maintenanceTasks          MaintenanceTask[]
+  assignedByTasks           MaintenanceTask[] @relation("TaskAssignedBy")
+  contractors               Contractor[]
+  notifications             Notification[]
 }
 
 enum Role {
@@ -44,7 +45,10 @@ model Listing {
   updatedAt   DateTime  @updatedAt
   hostId      String
 
+  defaultCleanerId  String?
+
   host              User              @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+  defaultCleaner    User?             @relation("ListingDefaultCleaner", fields: [defaultCleanerId], references: [id], onDelete: SetNull)
   rooms             Room[]
   jobs              Job[]
   coHosts           ListingCoHost[]   @relation("CoHostListing")

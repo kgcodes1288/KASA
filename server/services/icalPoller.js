@@ -44,7 +44,7 @@ async function syncListing(listing) {
           data: {
             listingId: listing.id,
             roomId: room.id,
-            cleanerId: null,
+            cleanerId: listing.defaultCleanerId || null,
             checkoutDate,
             checkinDate,
             guestName: event.summary || 'Airbnb Guest',
