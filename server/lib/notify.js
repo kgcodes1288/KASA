@@ -102,8 +102,9 @@ async function notifyListingMembers(listingId, type, title, message, excludeUser
 /**
  * Send one digest notification + email for all newly created cleaning jobs in a sync run.
  * newJobs: [{ checkoutDate, roomCount }]
+ * assigneeId: if set, notify only that person; otherwise notify host + co-hosts.
  */
-async function notifyCleaningDigest(listingId, newJobs) {
+async function notifyCleaningDigest(listingId, newJobs, assigneeId = null) {
   if (!newJobs.length) return;
   try {
     const listing = await prisma.listing.findUnique({
@@ -112,7 +113,11 @@ async function notifyCleaningDigest(listingId, newJobs) {
     });
     if (!listing) return;
 
-    const ids = [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+    // If jobs are assigned, only the assignee is notified.
+    // If unassigned, host + all co-hosts are notified.
+    const ids = assigneeId
+      ? [assigneeId]
+      : [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
     if (!ids.length) return;
 
     const title   = `${newJobs.length} new cleaning job${newJobs.length !== 1 ? 's' : ''} added`;
@@ -138,14 +143,14 @@ async function notifyCleaningDigest(listingId, newJobs) {
 
 /**
  * Send reminder notifications + emails for jobs checking out today.
- * Called by the hourly poller.
+ * Groups by (listing + assignee): assigned jobs notify only the assignee;
+ * unassigned jobs notify host + co-hosts.
  */
 async function sendDayOfReminders() {
   try {
     const todayStart = new Date(); todayStart.setUTCHours(0,0,0,0);
     const todayEnd   = new Date(); todayEnd.setUTCHours(23,59,59,999);
 
-    // Find all pending/in-progress jobs checking out today that haven't had a reminder sent
     const jobs = await prisma.job.findMany({
       where: {
         checkoutDate:   { gte: todayStart, lte: todayEnd },
@@ -156,38 +161,45 @@ async function sendDayOfReminders() {
         listing: {
           include: { coHosts: { where: { status: 'ACCEPTED' }, select: { userId: true } } },
         },
-        room: { select: { name: true } },
       },
     });
 
     if (!jobs.length) return;
 
-    // Group by listing
-    const byListing = {};
+    // Group by listing + assignee (null = unassigned)
+    const byGroup = {};
     jobs.forEach((j) => {
-      if (!byListing[j.listingId]) byListing[j.listingId] = { listing: j.listing, jobs: [] };
-      byListing[j.listingId].jobs.push(j);
+      const key = `${j.listingId}::${j.cleanerId || 'unassigned'}`;
+      if (!byGroup[key]) byGroup[key] = { listing: j.listing, cleanerId: j.cleanerId, jobs: [] };
+      byGroup[key].jobs.push(j);
     });
 
-    for (const { listing, jobs: listingJobs } of Object.values(byListing)) {
-      // Group by checkoutDate to get room count per date
+    for (const { listing, cleanerId, jobs: groupJobs } of Object.values(byGroup)) {
+      // Summarise by checkout date
       const byDate = {};
-      listingJobs.forEach((j) => {
-        const key = j.checkoutDate.toISOString().slice(0, 10); // YYYY-MM-DD, ignore time variation
+      groupJobs.forEach((j) => {
+        const key = j.checkoutDate.toISOString().slice(0, 10);
         if (!byDate[key]) byDate[key] = { checkoutDate: j.checkoutDate, roomCount: 0 };
         byDate[key].roomCount++;
       });
       const jobSummary = Object.values(byDate);
 
-      const ids = [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
-      const title   = `🔔 Cleaning reminder — checkout today`;
+      // Assigned → notify only the assignee. Unassigned → host + co-hosts.
+      const ids = cleanerId
+        ? [cleanerId]
+        : [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+
+      const title   = '🔔 Cleaning reminder — checkout today';
       const message = `${jobSummary.length > 1 ? `${jobSummary.length} checkouts` : 'A checkout'} today at ${listing.name}`;
 
       await prisma.notification.createMany({
         data: ids.map((userId) => ({ userId, type: 'JOB_CREATED', title, message, listingId: listing.id })),
       });
 
-      const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
+      const users = await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true },
+      });
       await Promise.allSettled(users.map((u) =>
         u.email && !u.emailUnsubscribed ? sendCleaningReminderEmail({
           toEmail: u.email, toName: u.name,
@@ -197,13 +209,12 @@ async function sendDayOfReminders() {
         }) : Promise.resolve()
       ));
 
-      // Mark all these jobs as reminder sent
       await prisma.job.updateMany({
-        where: { id: { in: listingJobs.map((j) => j.id) } },
+        where: { id: { in: groupJobs.map((j) => j.id) } },
         data:  { reminderSentAt: new Date() },
       });
 
-      console.log(`[notify] Reminder sent for ${listing.name} — ${jobSummary.length} checkout(s) today`);
+      console.log(`[notify] Reminder sent for ${listing.name} — ${jobSummary.length} checkout(s) today (assignee: ${cleanerId || 'host/co-hosts'})`);
     }
   } catch (err) {
     console.error('[sendDayOfReminders]', err.message);
