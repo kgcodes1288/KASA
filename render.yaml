@@ -1,24 +1,43 @@
 databases:
-  - name: cleanstay-db
+  - name: cleanstay-db-dev
     plan: free
-    databaseName: cleanstay
-    user: cleanstay
+    databaseName: cleanstay_dev
+    user: cleanstay_dev
 
 services:
   - type: web
-    name: cleanstay-api
+    name: cleanstay-api-dev
     env: node
     rootDir: server
     buildCommand: npm install && npx prisma generate
     startCommand: npx prisma db push --accept-data-loss && node index.js
+    branch: dev
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: cleanstay-db
+          name: cleanstay-db-dev
           property: connectionString
+      - key: NODE_ENV
+        value: development
       - key: JWT_SECRET
         generateValue: true
       - key: CLIENT_URL
+        value: https://cleanstay-client-dev.onrender.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://cleanstay-api-dev.onrender.com/api/auth/google/callback
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
         sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
@@ -26,16 +45,19 @@ services:
         sync: false
       - key: TWILIO_PHONE
         sync: false
+      - key: ADMIN_EMAIL
+        sync: false
 
   - type: web
-    name: cleanstay-client
+    name: cleanstay-client-dev
     env: static
     rootDir: client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    branch: dev
     envVars:
       - key: VITE_API_URL
-        sync: false
+        value: https://cleanstay-api-dev.onrender.com
     routes:
       - type: rewrite
         source: /*
