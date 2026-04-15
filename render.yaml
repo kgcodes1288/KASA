@@ -1,6 +1,6 @@
 databases:
   - name: cleanstay-db
-    plan: free
+    plan: pro
     databaseName: cleanstay
     user: cleanstay
 
