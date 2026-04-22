@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-const API_BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+const _apiRoot = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
+const API_BASE = _apiRoot ? `${_apiRoot}/api` : '/api';
 
 export default function Register() {
   const { register } = useAuth();
