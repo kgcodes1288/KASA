@@ -168,7 +168,7 @@ function ListingModal({ onClose, onSaved, listing }) {
         {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
         <div className="form-group">
           <label>Listing name</label>
-          <input className="input" placeholder="Beach House #1" value={form.name} onChange={(e) => set('name', e.target.value)} />
+          <input className="input" placeholder="Beach House #1" value={form.name} onChange={(e) => set('name', e.target.value)} maxLength={80} />
         </div>
         <div className="form-group">
           <label>Address (optional)</label>
@@ -256,7 +256,10 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
   const removeFile = (idx) => setAttachedFiles((prev) => prev.filter((_, j) => j !== idx));
 
   const handleSave = async () => {
-    if (!title.trim()) { setError('Title is required'); return; }
+    if (!title.trim()) {
+      setError(taskType === 'PAYMENT_REQUEST' ? "What's the payment for? is required" : 'Title is required');
+      return;
+    }
     const due = scheduleType === 'one_time' ? dueDate : nextDueAt;
     if (!due) { setError('Due date is required'); return; }
     if (scope === 'room' && !roomId) { setError('Please select a room'); return; }
@@ -351,9 +354,17 @@ function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved }) {
                 <label>Payment amount <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
                 <input
                   className="input"
-                  placeholder="e.g. $150"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 150"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Home','End','.'];
+                    if (allowed.includes(e.key)) return;
+                    if (/^[0-9]$/.test(e.key)) return;
+                    e.preventDefault();
+                  }}
                 />
               </div>
             )}
@@ -505,6 +516,10 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 
   const handleSend = async () => {
     if (!email.trim()) { setError('Email is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return;
+    }
     setSaving(true); setError('');
     try {
       await api.post(`/listings/${listing.id}/cohosts/invite`, { email: email.trim(), role });
