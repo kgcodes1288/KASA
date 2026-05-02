@@ -4,6 +4,10 @@ const prisma = require('../lib/prisma');
 const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
 
 async function syncListing(listing) {
+  if (!listing.icalUrl) {
+    console.log(`[iCal] Skipping ${listing.name} — no iCal URL configured`);
+    return;
+  }
   try {
     console.log(`[iCal] Syncing listing: ${listing.name}`);
     const events = await ical.async.fromURL(listing.icalUrl);

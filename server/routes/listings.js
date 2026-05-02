@@ -20,10 +20,10 @@ router.post('/', auth, async (req, res) => {
     return res.status(403).json({ message: 'Only hosts can create listings' });
   try {
     const { name, address, icalUrl } = req.body;
-    if (!name || !icalUrl)
-      return res.status(400).json({ message: 'name and icalUrl are required' });
+    if (!name)
+      return res.status(400).json({ message: 'Listing name is required' });
     const listing = await prisma.listing.create({
-      data: { name, address: address || null, icalUrl, hostId: req.user.id },
+      data: { name, address: address || null, icalUrl: icalUrl || null, hostId: req.user.id },
     });
     res.status(201).json(listing);
   } catch (err) {

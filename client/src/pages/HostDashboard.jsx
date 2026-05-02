@@ -142,7 +142,7 @@ function ListingModal({ onClose, onSaved, listing }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    if (!form.name || !form.icalUrl) { setError('Name and iCal URL are required'); return; }
+    if (!form.name) { setError('Listing name is required'); return; }
     setSaving(true); setError('');
     try {
       if (editing) {
@@ -175,9 +175,9 @@ function ListingModal({ onClose, onSaved, listing }) {
           <input className="input" placeholder="123 Ocean Drive, Miami" value={form.address} onChange={(e) => set('address', e.target.value)} />
         </div>
         <div className="form-group">
-          <label>Airbnb iCal URL</label>
+          <label>Airbnb iCal URL <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
           <input className="input" placeholder="https://www.airbnb.com/calendar/ical/..." value={form.icalUrl} onChange={(e) => set('icalUrl', e.target.value)} />
-          <p style={{ fontSize: 12, marginTop: 4 }}>Find this in Airbnb → Listing → Availability → Export calendar</p>
+          <p style={{ fontSize: 12, marginTop: 4 }}>Find this in Airbnb → Listing → Availability → Export calendar. You can add it later.</p>
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
@@ -606,9 +606,11 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         {!isOwner && <RoleBadge role={coHostRole} />}
       </div>
 
-      <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14 }}>
-        {l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}
-      </div>
+      {l.icalUrl && (
+        <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14 }}>
+          {l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}
+        </div>
+      )}
 
       <div className="cluster">
         <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
@@ -619,9 +621,11 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
             <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
               + Add task
             </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
-              {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
-            </button>
+            {l.icalUrl && (
+              <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
+                {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
+              </button>
+            )}
             <button className="btn btn-secondary btn-sm" onClick={() => onEdit(l)}>
               ✏️ Edit
             </button>
