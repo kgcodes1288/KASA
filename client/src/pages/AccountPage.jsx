@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -314,15 +314,24 @@ function ContractorsSection() {
                   placeholder="Jane Smith"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  maxLength={80}
                 />
               </div>
               <div style={{ flex: 1, minWidth: 160 }}>
                 <label style={styles.label}>Phone *</label>
                 <input
                   className="input"
+                  type="tel"
                   placeholder="+1 555 000 0000"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onKeyDown={(e) => {
+                    const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Home','End'];
+                    if (allowed.includes(e.key)) return;
+                    if (/^[0-9+\-\s]$/.test(e.key)) return;
+                    e.preventDefault();
+                  }}
+                  pattern="[0-9+\-\s]*"
                 />
               </div>
             </div>
@@ -529,6 +538,10 @@ function CoHostSection() {
   const handleInvite = async (listingId) => {
     const form = inviteForm[listingId] || {};
     if (!form.email || !form.role) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((form.email || '').trim())) {
+      setField(listingId, 'msg', { type: 'error', text: 'Please enter a valid email address' });
+      return;
+    }
     setField(listingId, 'loading', true);
     setField(listingId, 'msg', null);
     try {
@@ -560,6 +573,7 @@ function CoHostSection() {
     if (!window.confirm('Withdraw this invite?')) return;
     try {
       await api.delete(`/listings/${listingId}/cohosts/invite/${coHostId}`);
+      setField(listingId, 'msg', null);
       load();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to withdraw invite');
@@ -802,7 +816,9 @@ function DeleteAccountSection() {
                 border: '1px solid #fca5a5',
                 borderRadius: 8,
                 fontSize: '0.95rem',
+                lineHeight: 1.5,
                 boxSizing: 'border-box',
+                caretColor: 'auto',
               }}
             />
           </div>
@@ -855,10 +871,13 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
     padding: '12px 16px',
     border: '1px solid var(--border)',
     borderRadius: 10,
     backgroundColor: 'var(--bg)',
+    minWidth: 0,
+    wordBreak: 'break-word',
   },
   contractorRow: {
     display: 'flex',
@@ -947,8 +966,18 @@ export default function AccountPage() {
     email: user?.email || '',
     phone: user?.phone || '',
   });
+  const initialProfile = useRef({
+    name:  user?.name  || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+  });
+  const profileChanged =
+    profile.name  !== initialProfile.current.name  ||
+    profile.email !== initialProfile.current.email ||
+    profile.phone !== (initialProfile.current.phone || '');
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg]         = useState(null);
+  const [saveSuccess, setSaveSuccess]       = useState(false);
 
   const [passwords, setPasswords] = useState({
     currentPassword: '',
@@ -961,10 +990,13 @@ export default function AccountPage() {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setProfileMsg(null);
+    setSaveSuccess(false);
     setProfileLoading(true);
     try {
       const { data } = await api.put('/auth/profile', profile);
       updateUser(data);
+      initialProfile.current = { name: profile.name, email: profile.email, phone: profile.phone || '' };
+      setSaveSuccess(true);
       setProfileMsg({ type: 'success', text: 'Profile updated successfully!' });
     } catch (err) {
       setProfileMsg({ type: 'error', text: err.response?.data?.message || 'Update failed' });
@@ -1073,7 +1105,8 @@ export default function AccountPage() {
                 <label htmlFor="name">Full Name</label>
                 <input
                   id="name" type="text" value={profile.name}
-                  onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                  onChange={(e) => { setProfile({ ...profile, name: e.target.value }); setSaveSuccess(false); setProfileMsg(null); }}
+                  maxLength={80}
                   required
                 />
               </div>
@@ -1081,7 +1114,7 @@ export default function AccountPage() {
                 <label htmlFor="email">Email Address</label>
                 <input
                   id="email" type="email" value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  onChange={(e) => { setProfile({ ...profile, email: e.target.value }); setSaveSuccess(false); setProfileMsg(null); }}
                   required
                 />
               </div>
@@ -1089,14 +1122,21 @@ export default function AccountPage() {
                 <label htmlFor="phone">Phone Number</label>
                 <input
                   id="phone" type="tel" value={profile.phone || ''}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                  onChange={(e) => { setProfile({ ...profile, phone: e.target.value }); setSaveSuccess(false); setProfileMsg(null); }}
+                  onKeyDown={(e) => {
+                    const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab','Home','End'];
+                    if (allowed.includes(e.key)) return;
+                    if (/^[0-9+\-\s]$/.test(e.key)) return;
+                    e.preventDefault();
+                  }}
+                  pattern="[0-9+\-\s]*"
                   placeholder="+1 555 000 0000"
                 />
               </div>
               {profileMsg && (
                 <p className={`form-msg ${profileMsg.type}`}>{profileMsg.text}</p>
               )}
-              <button type="submit" className="btn-primary" disabled={profileLoading}>
+              <button type="submit" className="btn-primary" disabled={profileLoading || !profileChanged}>
                 {profileLoading ? 'Saving…' : 'Save Changes'}
               </button>
             </form>
@@ -1167,7 +1207,7 @@ export default function AccountPage() {
         {/* ── Legal Footer ── */}
         <footer className="account-legal-footer">
           <a href="/privacy-terms#privacy-policy" className="account-legal-link">Privacy Policy</a>
-          <span className="account-legal-sep">·</span>
+          <span className="account-legal-sep"> | </span>
           <a href="/privacy-terms#terms-conditions" className="account-legal-link">Terms &amp; Conditions</a>
         </footer>
 

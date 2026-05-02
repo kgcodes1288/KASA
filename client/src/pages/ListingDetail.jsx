@@ -1289,7 +1289,7 @@ export default function ListingDetail() {
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                                         {checklist.map((ci) => (
                                           <label key={ci.id}
-                                            style={{ display: 'flex', alignItems: 'center', gap: 9,
+                                            style={{ display: 'flex', alignItems: 'flex-start', gap: 9,
                                               cursor: togglingItem === ci.id ? 'wait' : 'pointer',
                                               opacity: togglingItem === ci.id ? 0.5 : 1 }}>
                                             <input
@@ -1297,13 +1297,20 @@ export default function ListingDetail() {
                                               checked={!!ci.completed}
                                               disabled={togglingItem === ci.id}
                                               onChange={() => handleToggleChecklistItem(r.jobId, ci.id, ci.completed)}
-                                              style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0 }}
+                                              style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
                                             />
-                                            <span style={{ fontSize: 12, color: colorSet.color,
-                                              textDecoration: ci.completed ? 'line-through' : 'none',
-                                              opacity: ci.completed ? 0.45 : 1 }}>
-                                              {ci.text}
-                                            </span>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                              <span style={{ fontSize: 12, color: colorSet.color,
+                                                textDecoration: ci.completed ? 'line-through' : 'none',
+                                                opacity: ci.completed ? 0.45 : 1 }}>
+                                                {ci.text}
+                                              </span>
+                                              {ci.completed && ci.completedAt && (
+                                                <span style={{ fontSize: 10, color: colorSet.color, opacity: 0.5, marginTop: 1 }}>
+                                                  ✓ {new Date(ci.completedAt).toLocaleString()}
+                                                </span>
+                                              )}
+                                            </div>
                                           </label>
                                         ))}
                                       </div>
