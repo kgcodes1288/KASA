@@ -793,6 +793,7 @@ export default function ListingDetail() {
                       const tasks     = entity.maintenanceTasks || [];
                       const checklist = entity.checklistItems || [];
                       const isRoom    = entity.entityType === 'ROOM';
+                      const jobCount  = jobs.filter((j) => j.room?.id === entity.id).length;
 
                       return (
                         <div key={entity.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -804,7 +805,7 @@ export default function ListingDetail() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <span style={{ fontWeight: 600 }}>{entity.name}</span>
                               <span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>
-                                {isRoom && `${checklist.length} cleaning · `}
+                                {isRoom && `${jobCount} cleaning job${jobCount !== 1 ? 's' : ''} · `}
                                 {tasks.length} maintenance
                               </span>
                             </div>
