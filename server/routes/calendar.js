@@ -94,8 +94,9 @@ router.get('/', auth, async (req, res) => {
     for (const job of jobs) {
       const listingName = allListings.find((l) => l.id === job.listingId)?.name;
 
-      // Guest stay fallback — only emit if not already covered by a Booking record
-      if (job.checkinDate && job.checkoutDate) {
+      // Guest stay fallback — skip blocked/unavailable names and anything already covered by a Booking record
+      const isBlockedJob = /not available|airbnb \(not available\)|blocked/i.test(job.guestName || '');
+      if (!isBlockedJob && job.checkinDate && job.checkoutDate) {
         const key = `${job.listingId}|${dateKey(job.checkinDate)}|${dateKey(job.checkoutDate)}`;
         if (!seenStays.has(key)) {
           seenStays.add(key);
