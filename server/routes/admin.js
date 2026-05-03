@@ -109,4 +109,44 @@ router.get('/listings', auth, adminOnly, async (req, res) => {
   }
 });
 
+// POST /api/admin/backfill-job-checklists
+// One-time: propagates existing room checklist templates into pending/in_progress jobs
+router.post('/backfill-job-checklists', auth, adminOnly, async (req, res) => {
+  try {
+    const rooms = await prisma.room.findMany({
+      include: { checklistItems: true },
+    });
+
+    const roomsWithItems = rooms.filter((r) => r.checklistItems.length > 0);
+    let totalAdded = 0;
+    const log = [];
+
+    for (const room of roomsWithItems) {
+      const templateTexts = room.checklistItems.map((i) => i.text.trim());
+
+      const activeJobs = await prisma.job.findMany({
+        where: { roomId: room.id, status: { in: ['pending', 'in_progress'] } },
+        include: { checklistItems: true },
+      });
+
+      for (const job of activeJobs) {
+        const existingTexts = new Set(job.checklistItems.map((c) => c.text.trim().toLowerCase()));
+        const toAdd = templateTexts.filter((t) => !existingTexts.has(t.toLowerCase()));
+
+        if (toAdd.length > 0) {
+          await prisma.jobChecklist.createMany({
+            data: toAdd.map((text) => ({ jobId: job.id, text, done: false })),
+          });
+          totalAdded += toAdd.length;
+          log.push({ room: room.name, jobId: job.id, added: toAdd });
+        }
+      }
+    }
+
+    res.json({ message: `Backfill complete. ${totalAdded} item(s) added.`, log });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
