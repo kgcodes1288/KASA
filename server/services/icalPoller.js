@@ -6,7 +6,7 @@ const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
 async function syncListing(listing) {
   if (!listing.icalUrl) {
     console.log(`[iCal] Skipping ${listing.name} — no iCal URL configured`);
-    return;
+    return { jobsCreated: 0, reason: 'no_url' };
   }
   try {
     console.log(`[iCal] Syncing listing: ${listing.name}`);
@@ -21,7 +21,7 @@ async function syncListing(listing) {
 
     if (rooms.length === 0) {
       console.log(`[iCal] No rooms for listing ${listing.name} — skipping`);
-      return;
+      return { jobsCreated: 0, reason: 'no_rooms' };
     }
 
     // iCal all-day dates are midnight UTC — normalize to noon UTC so
@@ -78,8 +78,10 @@ async function syncListing(listing) {
       console.log(`[iCal] Digest sent for ${listing.name} — ${newJobsSummary.length} new checkout date(s)`);
     }
 
+    const totalCreated = Object.values(newJobsByDate).reduce((sum, j) => sum + j.roomCount, 0);
     await prisma.listing.update({ where: { id: listing.id }, data: { lastSynced: new Date() } });
-    console.log(`[iCal] Sync complete for: ${listing.name}`);
+    console.log(`[iCal] Sync complete for: ${listing.name} — ${totalCreated} job(s) created`);
+    return { jobsCreated: totalCreated, reason: 'ok' };
   } catch (err) {
     console.error(`[iCal] Error syncing listing ${listing.id}:`, err.message);
     throw err;

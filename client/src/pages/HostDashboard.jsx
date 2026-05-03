@@ -589,7 +589,7 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 }
 
 // ── Listing Card ─────────────────────────────────────────────────────────────
-function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, syncing, syncErrors, expandedCalendars, toggleCalendar }) {
+function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
 
@@ -669,6 +669,19 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
           ⚠️ {syncErrors[l.id]}
         </div>
       )}
+      {syncMessages?.[l.id] && (
+        <div style={{
+          marginTop: 10,
+          padding: '8px 12px',
+          background: syncMessages[l.id].startsWith('⚠️') ? '#fefce8' : '#f0fdf4',
+          border: `1px solid ${syncMessages[l.id].startsWith('⚠️') ? '#fde68a' : '#bbf7d0'}`,
+          borderRadius: 8,
+          fontSize: 12,
+          color: syncMessages[l.id].startsWith('⚠️') ? '#92400e' : '#166534',
+        }}>
+          {syncMessages[l.id]}
+        </div>
+      )}
 
       <button
         onClick={() => toggleCalendar(l.id)}
@@ -708,6 +721,7 @@ export default function HostDashboard() {
   const [editTarget, setEditTarget] = useState(null);
   const [syncing, setSyncing] = useState({});
   const [syncErrors, setSyncErrors] = useState({});
+  const [syncMessages, setSyncMessages] = useState({});
   const [syncVersion, setSyncVersion] = useState(0); // bumped after each sync to refresh AccountCalendar
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
@@ -772,12 +786,22 @@ export default function HostDashboard() {
 const handleSync = async (id) => {
   setSyncing((s) => ({ ...s, [id]: true }));
   setSyncErrors((e) => ({ ...e, [id]: null }));
+  setSyncMessages((m) => ({ ...m, [id]: null }));
   try {
-    await api.post(`/listings/${id}/sync`);
+    const { data } = await api.post(`/listings/${id}/sync`);
     load();
-    setSyncVersion((v) => v + 1); // signal AccountCalendar to re-fetch
+    setSyncVersion((v) => v + 1);
+
+    // Surface a helpful message based on what happened
+    if (data.reason === 'no_rooms') {
+      setSyncMessages((m) => ({ ...m, [id]: '⚠️ No rooms found — add rooms to this listing first so jobs can be created.' }));
+    } else if (data.jobsCreated === 0) {
+      setSyncMessages((m) => ({ ...m, [id]: '✓ Synced — no new bookings found in your calendar.' }));
+    } else {
+      setSyncMessages((m) => ({ ...m, [id]: `✓ Synced — ${data.jobsCreated} new cleaning job${data.jobsCreated !== 1 ? 's' : ''} created.` }));
+    }
   } catch (err) {
-    setSyncErrors((e) => ({ ...e, [id]: 'Sync failed, please try again' }));
+    setSyncErrors((e) => ({ ...e, [id]: err.response?.data?.message || 'Sync failed, please try again' }));
   } finally {
     setSyncing((s) => ({ ...s, [id]: false }));
   }
@@ -908,6 +932,7 @@ const handleSync = async (id) => {
                     onInvite={(l) => setQuickInviteModal(l)}
                     syncing={syncing}
                     syncErrors={syncErrors}
+                    syncMessages={syncMessages}
                     expandedCalendars={expandedCalendars}
                     toggleCalendar={toggleCalendar}
                   />
@@ -938,6 +963,7 @@ const handleSync = async (id) => {
                     onInvite={() => {}}
                     syncing={syncing}
                     syncErrors={syncErrors}
+                    syncMessages={syncMessages}
                     expandedCalendars={expandedCalendars}
                     toggleCalendar={toggleCalendar}
                   />
