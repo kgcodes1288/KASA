@@ -708,6 +708,7 @@ export default function HostDashboard() {
   const [editTarget, setEditTarget] = useState(null);
   const [syncing, setSyncing] = useState({});
   const [syncErrors, setSyncErrors] = useState({});
+  const [syncVersion, setSyncVersion] = useState(0); // bumped after each sync to refresh AccountCalendar
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
   const [quickInviteModal, setQuickInviteModal] = useState(null); // listing
@@ -774,8 +775,9 @@ const handleSync = async (id) => {
   try {
     await api.post(`/listings/${id}/sync`);
     load();
+    setSyncVersion((v) => v + 1); // signal AccountCalendar to re-fetch
   } catch (err) {
-    setSyncErrors((e) => ({ ...e, [id]: 'Sync failed, please try again' }));  // ← changed
+    setSyncErrors((e) => ({ ...e, [id]: 'Sync failed, please try again' }));
   } finally {
     setSyncing((s) => ({ ...s, [id]: false }));
   }
@@ -866,7 +868,7 @@ const handleSync = async (id) => {
       )}
 
       {activeTab === 'calendar' ? (
-        <AccountCalendar />
+        <AccountCalendar refreshKey={syncVersion} />
       ) : loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
           <div className="spinner" />

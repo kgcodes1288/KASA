@@ -23,7 +23,7 @@ const toLocal = (d) => {
   return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
 };
 
-export default function AccountCalendar() {
+export default function AccountCalendar({ refreshKey = 0 }) {
   const today = new Date();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,12 +36,13 @@ export default function AccountCalendar() {
   );
 
   useEffect(() => {
+    setLoading(true);
     api.get('/calendar')
       .then((r) => {
         setData(r.data);
-        // Auto-select the hosted property with the most jobs
+        // Auto-select the hosted property with the most jobs (only on first load)
         const { listings, events } = r.data;
-        if (listings.length > 0) {
+        if (listings.length > 0 && !selectedProperty) {
           const jobCount = {};
           listings.forEach((l) => { jobCount[l.id] = 0; });
           events.forEach((e) => { if (jobCount[e.listingId] !== undefined) jobCount[e.listingId]++; });
@@ -51,7 +52,7 @@ export default function AccountCalendar() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [refreshKey]); // re-fetch whenever parent signals a sync happened
 
   if (loading) {
     return (
