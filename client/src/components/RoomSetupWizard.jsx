@@ -28,12 +28,24 @@ const INDOOR_OPTIONS = [
 
 const OUTDOOR_OPTIONS = [
   { key: 'backyard', label: 'Backyard / Lawn', emoji: '🌿' },
-  { key: 'pool',     label: 'Pool Area',        emoji: '🏊' },
-  { key: 'garage',   label: 'Garage',           emoji: '🚗' },
-  { key: 'patio',    label: 'Patio / Deck',     emoji: '🌅' },
+  { key: 'pool',     label: 'Pool',            emoji: '🏊' },
+  { key: 'garage',   label: 'Garage',          emoji: '🚗' },
+  { key: 'patio',    label: 'Patio / Deck',    emoji: '🌅' },
 ];
 
-const STEPS = ['bedrooms', 'bathrooms', 'indoors', 'outdoors', 'review'];
+const APPLIANCE_OPTIONS = [
+  { key: 'ac',          label: 'Air Conditioner (AC)', emoji: '❄️',  defaultOn: true  },
+  { key: 'heater',      label: 'Heater / Furnace',     emoji: '🌡️', defaultOn: false },
+  { key: 'waterHeater', label: 'Water Heater',         emoji: '💧',  defaultOn: true  },
+  { key: 'washer',      label: 'Washer',               emoji: '🫧',  defaultOn: false },
+  { key: 'dryer',       label: 'Dryer',                emoji: '💨',  defaultOn: false },
+  { key: 'dishwasher',  label: 'Dishwasher',           emoji: '🥣',  defaultOn: false },
+  { key: 'refrigerator',label: 'Refrigerator',         emoji: '🧊',  defaultOn: false },
+  { key: 'oven',        label: 'Oven / Stove',         emoji: '🔥',  defaultOn: false },
+  { key: 'bbq',         label: 'BBQ / Grill',          emoji: '🪵',  defaultOn: false },
+];
+
+const STEPS = ['bedrooms', 'bathrooms', 'indoors', 'outdoors', 'appliances', 'review'];
 
 const roomEmoji = (name) => {
   if (name.includes('Bedroom') || name === 'Studio') return '🛏️';
@@ -43,9 +55,18 @@ const roomEmoji = (name) => {
   if (name === 'Dining Room')                         return '🍽️';
   if (name === 'Laundry Room')                        return '🧺';
   if (name.includes('Backyard') || name.includes('Lawn')) return '🌿';
-  if (name.includes('Pool'))                          return '🏊';
+  if (name === 'Pool')                                return '🏊';
   if (name.includes('Garage'))                        return '🚗';
   if (name.includes('Patio') || name.includes('Deck')) return '🌅';
+  if (name.includes('Air Conditioner') || name === 'AC') return '❄️';
+  if (name.includes('Heater') || name.includes('Furnace')) return '🌡️';
+  if (name === 'Water Heater')                        return '💧';
+  if (name === 'Washer')                              return '🫧';
+  if (name === 'Dryer')                               return '💨';
+  if (name === 'Dishwasher')                          return '🥣';
+  if (name === 'Refrigerator')                        return '🧊';
+  if (name.includes('Oven') || name.includes('Stove')) return '🔥';
+  if (name.includes('BBQ') || name.includes('Grill')) return '🪵';
   return '🏠';
 };
 
@@ -61,11 +82,15 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
   const [outdoors, setOutdoors]   = useState(
     Object.fromEntries(OUTDOOR_OPTIONS.map((o) => [o.key, false]))
   );
+  const [appliances, setAppliances] = useState(
+    Object.fromEntries(APPLIANCE_OPTIONS.map((o) => [o.key, o.defaultOn]))
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
 
-  const toggleIndoor  = (key) => setIndoors((p)  => ({ ...p, [key]: !p[key] }));
-  const toggleOutdoor = (key) => setOutdoors((p) => ({ ...p, [key]: !p[key] }));
+  const toggleIndoor    = (key) => setIndoors((p)    => ({ ...p, [key]: !p[key] }));
+  const toggleOutdoor   = (key) => setOutdoors((p)   => ({ ...p, [key]: !p[key] }));
+  const toggleAppliance = (key) => setAppliances((p) => ({ ...p, [key]: !p[key] }));
 
   const getRooms = () => {
     const rooms = [];
@@ -82,8 +107,9 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
         rooms.push({ name: bathrooms === 1 ? 'Bathroom' : `Bathroom ${i}`, entityType: 'ROOM' });
     }
 
-    INDOOR_OPTIONS.forEach((o)  => { if (indoors[o.key])  rooms.push({ name: o.label, entityType: 'ROOM'  }); });
-    OUTDOOR_OPTIONS.forEach((o) => { if (outdoors[o.key]) rooms.push({ name: o.label, entityType: 'SPACE' }); });
+    INDOOR_OPTIONS.forEach((o)    => { if (indoors[o.key])    rooms.push({ name: o.label, entityType: 'ROOM'      }); });
+    OUTDOOR_OPTIONS.forEach((o)   => { if (outdoors[o.key])   rooms.push({ name: o.label, entityType: 'SPACE'     }); });
+    APPLIANCE_OPTIONS.forEach((o) => { if (appliances[o.key]) rooms.push({ name: o.label, entityType: 'APPLIANCE' }); });
 
     return rooms;
   };
@@ -259,7 +285,7 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
             <>
               <div style={{ textAlign: 'center', fontSize: 32, marginBottom: 6 }}>🌿</div>
               <h4 style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-                Any outdoor areas or extras?
+                Any outdoor areas?
               </h4>
               <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 20 }}>
                 Select all that apply
@@ -288,8 +314,42 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
             </>
           )}
 
-          {/* ── Step 4: Review ── */}
+          {/* ── Step 4: Appliances ── */}
           {step === 4 && (
+            <>
+              <div style={{ textAlign: 'center', fontSize: 32, marginBottom: 6 }}>🔧</div>
+              <h4 style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+                Which appliances does this property have?
+              </h4>
+              <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 20 }}>
+                These get their own maintenance checklists — toggle off anything that doesn't apply
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                {APPLIANCE_OPTIONS.map((opt) => (
+                  <div key={opt.key} style={toggleCard(appliances[opt.key])} onClick={() => toggleAppliance(opt.key)}>
+                    <span style={{ fontSize: 22 }}>{opt.emoji}</span>
+                    <span style={{
+                      flex: 1, fontSize: 14,
+                      fontWeight: appliances[opt.key] ? 600 : 400,
+                      color: appliances[opt.key] ? 'var(--teal)' : 'var(--ink)',
+                    }}>
+                      {opt.label}
+                    </span>
+                    <span style={{
+                      fontSize: 18,
+                      color: appliances[opt.key] ? 'var(--teal)' : 'var(--border)',
+                      fontWeight: 700,
+                    }}>
+                      {appliances[opt.key] ? '✓' : '+'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ── Step 5: Review ── */}
+          {step === 5 && (
             <>
               <div style={{ textAlign: 'center', fontSize: 32, marginBottom: 6 }}>✅</div>
               <h4 style={{ textAlign: 'center', fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
@@ -303,7 +363,7 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
                   : 'Go back and select some spaces, or close to add rooms manually'}
               </p>
               {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
                 {rooms.map((r, i) => (
                   <div key={i} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
@@ -320,6 +380,15 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
                         border: '1px solid #86efac', fontWeight: 500,
                       }}>
                         outdoor
+                      </span>
+                    )}
+                    {r.entityType === 'APPLIANCE' && (
+                      <span style={{
+                        marginLeft: 'auto', fontSize: 10, padding: '2px 6px',
+                        borderRadius: 10, background: '#eff6ff', color: '#1d4ed8',
+                        border: '1px solid #bfdbfe', fontWeight: 500,
+                      }}>
+                        appliance
                       </span>
                     )}
                   </div>
