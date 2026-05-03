@@ -999,7 +999,23 @@ export default function ListingDetail() {
         });
 
         const sorted = applyFilters(allSorted);
-        const hiddenCount = allSorted.filter(isOld).length;
+
+        // Count past items that match the current filters (excluding the showOldJobs gate)
+        // so the "Show X past jobs" button reflects what will actually appear when clicked
+        const hiddenCount = allSorted.filter((item) => {
+          if (!isOld(item)) return false;
+          if (filterType === 'cleaning' && item._type !== 'cleaning_group') return false;
+          if (filterType === 'maintenance' && item._type !== 'maintenance') return false;
+          if (filterRoom) {
+            if (item._type === 'cleaning_group' && !item.rooms.some((r) => r.roomName === filterRoom)) return false;
+            if (item._type === 'maintenance' && item.roomName !== filterRoom) return false;
+          }
+          if (filterStatus) {
+            if (item._type === 'cleaning_group' && groupStatus(item.rooms) !== filterStatus) return false;
+            if (item._type === 'maintenance' && item.status !== filterStatus.toUpperCase()) return false;
+          }
+          return true;
+        }).length;
 
         const isMyTask = (i) => i._type === 'maintenance' && (
           i.assignedUser?.id === currentUser?.id ||
@@ -1077,7 +1093,11 @@ export default function ListingDetail() {
               <div className="empty-state" style={{ padding: '32px 0' }}>
                 <div style={{ fontSize: 28 }}>🔍</div>
                 <h3>No jobs match your filters</h3>
-                <p style={{ fontSize: 13 }}>Try adjusting the filters or showing past jobs</p>
+                <p style={{ fontSize: 13 }}>
+                  {!showOldJobs && hiddenCount > 0
+                    ? `${hiddenCount} past job${hiddenCount !== 1 ? 's' : ''} match${hiddenCount === 1 ? 'es' : ''} — click "Show past jobs" above to see them`
+                    : 'Try adjusting the filters above'}
+                </p>
               </div>
             ) : (
               <>
