@@ -105,21 +105,23 @@ export default function AccountCalendar() {
     const d = new Date(Date.UTC(year, month, day));  // must match toLocal() UTC midnight
     const dTime = d.getTime();
     let isStay = false;
+    let isCheckin = false;
     let isCheckout = false;
     const chips = [];
 
     for (const evt of filteredEvents) {
       if (evt.type === 'guest_stay') {
-        const checkin = toLocal(evt.checkinDate);
+        const checkin  = toLocal(evt.checkinDate);
         const checkout = toLocal(evt.checkoutDate);
-        if (d >= checkin && d < checkout) isStay = true;
-        if (dTime === checkout.getTime()) isCheckout = true;
+        if (dTime === checkin.getTime())   isCheckin  = true;
+        if (dTime === checkout.getTime())  isCheckout = true;
+        if (d > checkin && d < checkout)   isStay     = true;
       } else if (evt.type === 'contractor_job' || evt.type === 'maintenance_task') {
         if (toLocal(evt.date).getTime() === dTime) chips.push(evt);
       }
     }
 
-    return { isStay, isCheckout, chips };
+    return { isStay, isCheckin, isCheckout, chips };
   };
 
   const isToday = (day) =>
@@ -296,22 +298,25 @@ export default function AccountCalendar() {
                 );
               }
 
-              const { isStay, isCheckout, chips } = getDayInfo(day);
+              const { isStay, isCheckin, isCheckout, chips } = getDayInfo(day);
               const todayFlag = isToday(day);
 
               let cellBg = 'transparent';
               if (filterMode === 'property') {
-                if (isCheckout) cellBg = '#fef9c3';
-                else if (isStay) cellBg = '#fee2e2';
+                if (isCheckout)     cellBg = '#fef9c3';
+                else if (isCheckin) cellBg = '#d1fae5';
+                else if (isStay)    cellBg = '#fee2e2';
               }
 
               const dayNumColor = todayFlag
                 ? 'var(--teal)'
                 : isCheckout
                   ? '#92400e'
-                  : isStay
-                    ? '#b91c1c'
-                    : 'var(--ink-soft)';
+                  : isCheckin
+                    ? '#065f46'
+                    : isStay
+                      ? '#b91c1c'
+                      : 'var(--ink-soft)';
 
               return (
                 <div key={day} style={{
@@ -379,6 +384,20 @@ export default function AccountCalendar() {
                       );
                     })}
 
+                    {/* Check-in label */}
+                    {isCheckin && filterMode === 'property' && (
+                      <div style={{
+                        fontSize: 10,
+                        padding: '2px 5px',
+                        borderRadius: 4,
+                        background: '#d1fae5',
+                        color: '#065f46',
+                        border: '1px solid #6ee7b7',
+                        fontWeight: 500,
+                      }}>
+                        Check-in
+                      </div>
+                    )}
                     {/* Checkout label when no contractor assigned */}
                     {isCheckout && filterMode === 'property' && chips.length === 0 && (
                       <div style={{
@@ -421,6 +440,10 @@ export default function AccountCalendar() {
             )
           ) : filterMode === 'property' ? (
             <>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: '#d1fae5', border: '1px solid #6ee7b7', display: 'inline-block' }} />
+                Check-in
+              </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: '#fee2e2', border: '1px solid #fca5a5', display: 'inline-block' }} />
                 Guest stay
