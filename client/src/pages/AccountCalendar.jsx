@@ -108,6 +108,7 @@ export default function AccountCalendar({ refreshKey = 0 }) {
     let isStay = false;
     let isCheckin = false;
     let isCheckout = false;
+    let isBlocked = false;
     const chips = [];
 
     for (const evt of filteredEvents) {
@@ -117,12 +118,16 @@ export default function AccountCalendar({ refreshKey = 0 }) {
         if (dTime === checkin.getTime())   isCheckin  = true;
         if (dTime === checkout.getTime())  isCheckout = true;
         if (d > checkin && d < checkout)   isStay     = true;
+      } else if (evt.type === 'blocked_date') {
+        const checkin  = toLocal(evt.checkinDate);
+        const checkout = toLocal(evt.checkoutDate);
+        if (dTime >= checkin.getTime() && dTime <= checkout.getTime()) isBlocked = true;
       } else if (evt.type === 'contractor_job' || evt.type === 'maintenance_task') {
         if (toLocal(evt.date).getTime() === dTime) chips.push(evt);
       }
     }
 
-    return { isStay, isCheckin, isCheckout, chips };
+    return { isStay, isCheckin, isCheckout, isBlocked, chips };
   };
 
   const isToday = (day) =>
@@ -299,14 +304,15 @@ export default function AccountCalendar({ refreshKey = 0 }) {
                 );
               }
 
-              const { isStay, isCheckin, isCheckout, chips } = getDayInfo(day);
+              const { isStay, isCheckin, isCheckout, isBlocked, chips } = getDayInfo(day);
               const todayFlag = isToday(day);
 
               let cellBg = 'transparent';
               if (filterMode === 'property') {
-                if (isCheckout)     cellBg = '#fef9c3';
-                else if (isCheckin) cellBg = '#d1fae5';
-                else if (isStay)    cellBg = '#fee2e2';
+                if (isCheckout)      cellBg = '#fef9c3';
+                else if (isCheckin)  cellBg = '#d1fae5';
+                else if (isStay)     cellBg = '#fee2e2';
+                else if (isBlocked)  cellBg = 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 3px, #f9fafb 3px, #f9fafb 7px)';
               }
 
               const dayNumColor = todayFlag
@@ -456,6 +462,10 @@ export default function AccountCalendar({ refreshKey = 0 }) {
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: CONTRACTOR_COLOR.bg, border: `1px solid ${CONTRACTOR_COLOR.border}`, display: 'inline-block' }} />
                 Contractor assigned
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 3px, #f9fafb 3px, #f9fafb 7px)', border: '1px solid #d1d5db', display: 'inline-block' }} />
+                Blocked / Unavailable
               </span>
             </>
           ) : (
