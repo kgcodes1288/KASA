@@ -150,15 +150,22 @@ function ListingModal({ onClose, onSaved, listing }) {
   const handleSave = async () => {
     if (!form.name) { setError('Listing name is required'); return; }
     setSaving(true); setError('');
+    // Send only the fields the API expects — don't spread the full listing
+    // object (which includes id, hostId, createdAt, etc.) into the body
+    const payload = {
+      name:    form.name,
+      address: form.address  || null,
+      icalUrl: form.icalUrl  || null,
+    };
     try {
       if (editing) {
-        await api.put(`/listings/${listing.id}`, form);
+        await api.put(`/listings/${listing.id}`, payload);
       } else {
-        await api.post('/listings', form);
+        await api.post('/listings', payload);
       }
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.message || 'Save failed');
+      setError(err.response?.data?.message || err.message || 'Save failed');
     } finally {
       setSaving(false);
     }
