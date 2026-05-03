@@ -144,7 +144,7 @@ function MiniCalendar({ jobs, bookings }) {
           let color = 'var(--ink)';
           let title = '';
 
-          if (status === 'blocked')  { bg = '#e5e7eb'; color = '#6b7280'; title = 'Blocked'; }
+          if (status === 'blocked')  { bg = 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 3px, #f9fafb 3px, #f9fafb 7px)'; color = '#6b7280'; title = 'Blocked'; }
           if (status === 'booked')   { bg = '#fee2e2'; color = '#b91c1c'; title = 'Booked'; }
           if (status === 'checkin')  { bg = '#d1fae5'; color = '#065f46'; title = 'Check-in'; }
           if (status === 'checkout') { bg = '#fef3c7'; color = '#92400e'; title = 'Checkout / Cleaning'; }
@@ -182,7 +182,7 @@ function MiniCalendar({ jobs, bookings }) {
           <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fef3c7', display: 'inline-block' }} /> Checkout
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 2, background: '#e5e7eb', display: 'inline-block' }} /> Blocked
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: 'repeating-linear-gradient(45deg, #e5e7eb, #e5e7eb 3px, #f9fafb 3px, #f9fafb 7px)', display: 'inline-block' }} /> Blocked
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, outline: '2px solid var(--teal)', display: 'inline-block' }} /> Today
