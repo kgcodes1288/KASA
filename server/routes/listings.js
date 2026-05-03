@@ -42,6 +42,7 @@ router.get('/', auth, async (req, res) => {
           select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
           orderBy: { checkoutDate: 'asc' },
         },
+        _count: { select: { rooms: true } },
       },
     });
     res.json(listings);

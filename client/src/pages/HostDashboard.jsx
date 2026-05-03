@@ -4,6 +4,7 @@ import api from '../api';
 import HowToUseSection from '../components/HowToUseSection';
 import { useAuth } from '../context/AuthContext';
 import AccountCalendar from './AccountCalendar';
+import RoomSetupWizard from '../components/RoomSetupWizard';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -214,10 +215,11 @@ function ListingModal({ onClose, onSaved, listing }) {
     try {
       if (editing) {
         await api.put(`/listings/${listing.id}`, payload);
+        onSaved(null);
       } else {
-        await api.post('/listings', payload);
+        const { data: newListing } = await api.post('/listings', payload);
+        onSaved(newListing);
       }
-      onSaved();
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Save failed');
     } finally {
@@ -643,7 +645,7 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 }
 
 // ── Listing Card ─────────────────────────────────────────────────────────────
-function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
+function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, onSetupRooms, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
 
@@ -685,6 +687,11 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         </Link>
         {canEdit && (
           <>
+            {(l._count?.rooms ?? 1) === 0 && (
+              <button className="btn btn-primary btn-sm" onClick={() => onSetupRooms(l)}>
+                🏠 Setup rooms
+              </button>
+            )}
             <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
               + Add task
             </button>
@@ -792,6 +799,7 @@ export default function HostDashboard() {
   const [expandedCalendars, setExpandedCalendars] = useState({});
   const [quickTaskModal, setQuickTaskModal] = useState(null); // { listing, isOwner }
   const [quickInviteModal, setQuickInviteModal] = useState(null); // listing
+  const [wizardListing, setWizardListing] = useState(null); // listing to setup rooms for
   const [listingCoHosts, setListingCoHosts] = useState({}); // { [listingId]: acceptedCoHosts[] }
   const [activeTab, setActiveTab] = useState('properties');
   const [pendingInvites, setPendingInvites] = useState([]);
@@ -998,6 +1006,7 @@ const handleSync = async (id) => {
                     onSync={handleSync}
                     onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: true })}
                     onInvite={(l) => setQuickInviteModal(l)}
+                    onSetupRooms={(l) => setWizardListing(l)}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     syncMessages={syncMessages}
@@ -1029,6 +1038,7 @@ const handleSync = async (id) => {
                     onSync={handleSync}
                     onAddTask={(l) => setQuickTaskModal({ listing: l, isOwner: false })}
                     onInvite={() => {}}
+                    onSetupRooms={(l) => setWizardListing(l)}
                     syncing={syncing}
                     syncErrors={syncErrors}
                     syncMessages={syncMessages}
@@ -1046,7 +1056,12 @@ const handleSync = async (id) => {
         <ListingModal
           listing={editTarget}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={(newListing) => {
+            setShowModal(false);
+            load();
+            // Auto-open room wizard after creating a new listing
+            if (newListing && !editTarget) setWizardListing(newListing);
+          }}
         />
       )}
       {quickTaskModal && currentUser && (
@@ -1063,6 +1078,13 @@ const handleSync = async (id) => {
           listing={quickInviteModal}
           onClose={() => setQuickInviteModal(null)}
           onSaved={() => { setQuickInviteModal(null); load(); }}
+        />
+      )}
+      {wizardListing && (
+        <RoomSetupWizard
+          listing={wizardListing}
+          onClose={() => setWizardListing(null)}
+          onDone={() => { setWizardListing(null); load(); }}
         />
       )}
     </div>

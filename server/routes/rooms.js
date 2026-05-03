@@ -27,6 +27,36 @@ router.get('/listing/:listingId', auth, async (req, res) => {
   }
 });
 
+// POST /api/rooms/listing/:listingId/batch — create multiple rooms at once
+router.post('/listing/:listingId/batch', auth, async (req, res) => {
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
+  try {
+    const { listingId } = req.params;
+    const ok = await hasListingAccess(listingId, req.user.id);
+    if (!ok) return res.status(403).json({ message: 'Not your listing' });
+
+    const { rooms } = req.body;
+    if (!Array.isArray(rooms) || rooms.length === 0)
+      return res.status(400).json({ message: 'No rooms provided' });
+
+    const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
+    const created = await Promise.all(
+      rooms.map((r) =>
+        prisma.room.create({
+          data: {
+            name: r.name,
+            entityType: validTypes.includes(r.entityType) ? r.entityType : 'ROOM',
+            listingId,
+          },
+        })
+      )
+    );
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // POST /api/rooms — owner or co-host can create rooms
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
