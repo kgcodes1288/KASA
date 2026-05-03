@@ -127,10 +127,15 @@ router.post('/:id/sync', auth, async (req, res) => {
     if (!listing) return res.status(404).json({ message: 'Not found' });
     if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
-    await syncListing(listing);
+    const result = await syncListing(listing);
 
     const updated = await prisma.listing.findUnique({ where: { id: req.params.id } });
-    res.json({ message: 'Sync complete', lastSynced: updated.lastSynced });
+    res.json({
+      message: 'Sync complete',
+      lastSynced: updated.lastSynced,
+      jobsCreated: result?.jobsCreated ?? 0,
+      reason: result?.reason ?? 'ok',
+    });
   } catch (err) {
     console.error('[sync route] error:', err.message);
     res.status(500).json({ message: `Sync failed: ${err.message}` });
