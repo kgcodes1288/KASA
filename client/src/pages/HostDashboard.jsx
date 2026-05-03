@@ -685,13 +685,29 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
           🏠 Manage Listing & Jobs
         </Link>
+        {canEdit && (l._count?.rooms ?? 1) === 0 && (
+          <div style={{
+            marginBottom: 12,
+            padding: '10px 14px',
+            background: '#f0fdf4',
+            border: '1px solid #86efac',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}>
+            <p style={{ fontSize: 12, color: '#166534', margin: 0 }}>
+              No rooms yet — set them up to generate cleaning jobs
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={() => onSetupRooms(l)} style={{ whiteSpace: 'nowrap' }}>
+              🏠 Setup rooms
+            </button>
+          </div>
+        )}
+
         {canEdit && (
           <>
-            {(l._count?.rooms ?? 1) === 0 && (
-              <button className="btn btn-primary btn-sm" onClick={() => onSetupRooms(l)}>
-                🏠 Setup rooms
-              </button>
-            )}
             <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
               + Add task
             </button>
