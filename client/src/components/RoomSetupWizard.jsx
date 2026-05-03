@@ -37,11 +37,11 @@ const APPLIANCE_OPTIONS = [
   { key: 'ac',          label: 'Air Conditioner (AC)', emoji: '❄️',  defaultOn: true  },
   { key: 'heater',      label: 'Heater / Furnace',     emoji: '🌡️', defaultOn: false },
   { key: 'waterHeater', label: 'Water Heater',         emoji: '💧',  defaultOn: true  },
-  { key: 'washer',      label: 'Washer',               emoji: '🫧',  defaultOn: false },
-  { key: 'dryer',       label: 'Dryer',                emoji: '💨',  defaultOn: false },
-  { key: 'dishwasher',  label: 'Dishwasher',           emoji: '🥣',  defaultOn: false },
-  { key: 'refrigerator',label: 'Refrigerator',         emoji: '🧊',  defaultOn: false },
-  { key: 'oven',        label: 'Oven / Stove',         emoji: '🔥',  defaultOn: false },
+  { key: 'washer',      label: 'Washer',               emoji: '🫧',  defaultOn: true  },
+  { key: 'dryer',       label: 'Dryer',                emoji: '💨',  defaultOn: true  },
+  { key: 'dishwasher',  label: 'Dishwasher',           emoji: '🥣',  defaultOn: true  },
+  { key: 'refrigerator',label: 'Refrigerator',         emoji: '🧊',  defaultOn: true  },
+  { key: 'oven',        label: 'Oven / Stove',         emoji: '🔥',  defaultOn: true  },
   { key: 'bbq',         label: 'BBQ / Grill',          emoji: '🪵',  defaultOn: false },
 ];
 
