@@ -979,6 +979,25 @@ export default function AccountPage() {
   const [profileMsg, setProfileMsg]         = useState(null);
   const [saveSuccess, setSaveSuccess]       = useState(false);
 
+  // Email-change password confirmation
+  const emailChanging = profile.email.trim().toLowerCase() !== (user?.email || '').toLowerCase();
+  const [emailConfirmPw, setEmailConfirmPw] = useState('');
+
+  // Resend verification
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMsg, setResendMsg]         = useState(null);
+  const handleResendVerification = async () => {
+    setResendLoading(true); setResendMsg(null);
+    try {
+      await api.post('/auth/resend-verification');
+      setResendMsg('Verification email sent — check your inbox.');
+    } catch {
+      setResendMsg('Failed to send. Please try again.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword:     '',
@@ -993,11 +1012,18 @@ export default function AccountPage() {
     setSaveSuccess(false);
     setProfileLoading(true);
     try {
-      const { data } = await api.put('/auth/profile', profile);
+      const payload = { ...profile };
+      if (emailChanging && user?.hasPassword) payload.currentPassword = emailConfirmPw;
+      const { data } = await api.put('/auth/profile', payload);
       updateUser(data);
       initialProfile.current = { name: profile.name, email: profile.email, phone: profile.phone || '' };
+      setEmailConfirmPw('');
       setSaveSuccess(true);
-      setProfileMsg({ type: 'success', text: 'Profile updated successfully!' });
+      if (emailChanging) {
+        setProfileMsg({ type: 'success', text: 'Email updated. Check your new inbox for a verification link.' });
+      } else {
+        setProfileMsg({ type: 'success', text: 'Profile updated successfully!' });
+      }
     } catch (err) {
       setProfileMsg({ type: 'error', text: err.response?.data?.message || 'Update failed' });
     } finally {
@@ -1034,6 +1060,42 @@ export default function AccountPage() {
   return (
     <div className="account-page">
       <div className="account-container">
+
+        {/* ── Email unverified banner ── */}
+        {user && user.emailVerified === false && (
+          <div style={{
+            marginBottom: 20,
+            padding: '12px 16px',
+            borderRadius: 10,
+            background: '#fefce8',
+            border: '1px solid #fde68a',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>⚠️</span>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ margin: '0 0 4px', fontWeight: 600, fontSize: 14, color: '#92400e' }}>
+                Please verify your email address
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: '#78350f' }}>
+                We sent a verification link to <strong>{user.email}</strong>. Check your inbox (and spam folder).
+              </p>
+              {resendMsg && (
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: '#065f46' }}>{resendMsg}</p>
+              )}
+            </div>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleResendVerification}
+              disabled={resendLoading}
+              style={{ flexShrink: 0 }}
+            >
+              {resendLoading ? 'Sending…' : 'Resend email'}
+            </button>
+          </div>
+        )}
 
         <PendingInvites />
 
@@ -1114,10 +1176,26 @@ export default function AccountPage() {
                 <label htmlFor="email">Email Address</label>
                 <input
                   id="email" type="email" value={profile.email}
-                  onChange={(e) => { setProfile({ ...profile, email: e.target.value }); setSaveSuccess(false); setProfileMsg(null); }}
+                  onChange={(e) => { setProfile({ ...profile, email: e.target.value }); setSaveSuccess(false); setProfileMsg(null); setEmailConfirmPw(''); }}
                   required
                 />
               </div>
+              {/* Require password when changing email (password-based accounts only) */}
+              {emailChanging && user?.hasPassword && (
+                <div className="form-group">
+                  <label htmlFor="emailConfirmPw">
+                    Confirm your password to change email
+                  </label>
+                  <input
+                    id="emailConfirmPw"
+                    type="password"
+                    placeholder="Enter your current password"
+                    value={emailConfirmPw}
+                    onChange={(e) => setEmailConfirmPw(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="form-group">
                 <label htmlFor="phone">Phone Number</label>
                 <input
@@ -1136,7 +1214,11 @@ export default function AccountPage() {
               {profileMsg && (
                 <p className={`form-msg ${profileMsg.type}`}>{profileMsg.text}</p>
               )}
-              <button type="submit" className="btn-primary" disabled={profileLoading || !profileChanged}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={profileLoading || !profileChanged || (emailChanging && user?.hasPassword && !emailConfirmPw)}
+              >
                 {profileLoading ? 'Saving…' : 'Save Changes'}
               </button>
             </form>

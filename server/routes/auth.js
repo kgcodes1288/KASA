@@ -1,8 +1,12 @@
 const router = require('express').Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const auth = require('../middleware/auth');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../lib/email');
+
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
@@ -10,6 +14,7 @@ const signToken = (id) =>
 const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone,
   hasPassword: !!u.password,
+  emailVerified: u.emailVerified,
   isAdmin: !!(process.env.ADMIN_EMAIL && u.email === process.env.ADMIN_EMAIL),
 });
 
@@ -34,15 +39,28 @@ router.post('/register', async (req, res) => {
     if (existing) return res.status(400).json({ message: 'Email already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
+    const emailVerifyToken = crypto.randomBytes(32).toString('hex');
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, role, phone: normalizePhone(phone) || null },
+      data: {
+        name, email, password: hashed, role,
+        phone: normalizePhone(phone) || null,
+        emailVerified: false,
+        emailVerifyToken,
+      },
     });
 
-// Auto-link any pending co-host invites matching this email
-await prisma.listingCoHost.updateMany({
-  where: { inviteEmail: email.toLowerCase(), status: 'PENDING', userId: null },
-  data: { userId: user.id },
-});
+    // Auto-link any pending co-host invites matching this email
+    await prisma.listingCoHost.updateMany({
+      where: { inviteEmail: email.toLowerCase(), status: 'PENDING', userId: null },
+      data: { userId: user.id },
+    });
+
+    // Send verification email (non-blocking)
+    sendVerificationEmail({
+      to: user.email,
+      name: user.name,
+      verifyUrl: `${CLIENT_URL}/verify-email?token=${emailVerifyToken}`,
+    }).catch(() => {});
 
     res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
   } catch (err) {
@@ -128,13 +146,14 @@ router.get('/google/callback', async (req, res) => {
         });
       }
     } else {
-      // Create new user
+      // Create new user — Google has already verified the email
       user = await prisma.user.create({
         data: {
           name: profile.name || profile.email.split('@')[0],
           email: profile.email,
           googleId: profile.id,
           role: 'host',
+          emailVerified: true,
         },
       });
     }
@@ -161,16 +180,43 @@ router.get('/me', auth, (req, res) => {
 // PUT /api/auth/profile
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { name, email, phone } = req.body;
+    const { name, email, phone, currentPassword } = req.body;
     if (!name || !email)
       return res.status(400).json({ message: 'Name and email are required' });
-    if (email !== req.user.email) {
-      const existing = await prisma.user.findUnique({ where: { email } });
+
+    const emailChanging = email.toLowerCase() !== req.user.email.toLowerCase();
+
+    if (emailChanging) {
+      // Require password confirmation for password-based accounts
+      if (req.user.password) {
+        if (!currentPassword)
+          return res.status(400).json({ message: 'Your current password is required to change your email address' });
+        const ok = await bcrypt.compare(currentPassword, req.user.password);
+        if (!ok)
+          return res.status(401).json({ message: 'Incorrect password' });
+      }
+      const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
       if (existing) return res.status(400).json({ message: 'Email already in use' });
     }
+
+    // If email is changing, reset verification and send a new link
+    const extraData = {};
+    if (emailChanging) {
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      extraData.emailVerified = false;
+      extraData.emailVerifyToken = verifyToken;
+      // Non-blocking
+      const updatedName = name || req.user.name;
+      sendVerificationEmail({
+        to: email,
+        name: updatedName,
+        verifyUrl: `${CLIENT_URL}/verify-email?token=${verifyToken}`,
+      }).catch(() => {});
+    }
+
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { name, email, phone: normalizePhone(phone) || null },
+      data: { name, email, phone: normalizePhone(phone) || null, ...extraData },
     });
     res.json(safeUser(updated));
   } catch (err) {
@@ -197,6 +243,95 @@ router.put('/password', auth, async (req, res) => {
       data: { password: hashed },
     });
     res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/auth/verify-email?token=xxx — no auth required
+router.get('/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ message: 'Token required' });
+    const user = await prisma.user.findFirst({ where: { emailVerifyToken: token } });
+    if (!user) return res.status(400).json({ message: 'Invalid or expired verification link' });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerifyToken: null },
+    });
+    res.json({ message: 'Email verified successfully' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/resend-verification — auth required
+router.post('/resend-verification', auth, async (req, res) => {
+  try {
+    if (req.user.emailVerified)
+      return res.json({ message: 'Your email is already verified' });
+    const token = crypto.randomBytes(32).toString('hex');
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { emailVerifyToken: token },
+    });
+    await sendVerificationEmail({
+      to: req.user.email,
+      name: req.user.name,
+      verifyUrl: `${CLIENT_URL}/verify-email?token=${token}`,
+    });
+    res.json({ message: 'Verification email sent' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/forgot-password — no auth required
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email is required' });
+    const user = await prisma.user.findUnique({ where: { email } });
+    // Always respond the same way to prevent email enumeration
+    if (!user || !user.password) {
+      return res.json({ message: 'If that email has an account, a reset link has been sent.' });
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetToken: token, passwordResetExpires: expires },
+    });
+    await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      resetUrl: `${CLIENT_URL}/reset-password?token=${token}`,
+    });
+    res.json({ message: 'If that email has an account, a reset link has been sent.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/auth/reset-password — no auth required
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword)
+      return res.status(400).json({ message: 'Token and new password are required' });
+    if (newPassword.length < 6)
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    const user = await prisma.user.findFirst({
+      where: { passwordResetToken: token, passwordResetExpires: { gt: new Date() } },
+    });
+    if (!user)
+      return res.status(400).json({ message: 'Reset link is invalid or has expired' });
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, passwordResetToken: null, passwordResetExpires: null },
+    });
+    res.json({ message: 'Password reset successfully. You can now sign in.' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

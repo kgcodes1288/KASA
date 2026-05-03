@@ -13,6 +13,8 @@ export default function Login() {
   const googleError = searchParams.get('error') === 'google_failed';
   const googleMsg = searchParams.get('msg');
 
+  const justReset = searchParams.get('reset') === '1';
+
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState(googleError ? (googleMsg ? `Google sign-in failed: ${googleMsg}` : 'Google sign-in failed. Please try again.') : '');
   const [loading, setLoading] = useState(false);
@@ -45,6 +47,11 @@ export default function Login() {
           <h1>🧹 CleanStay</h1>
           <p style={{ marginTop: 6 }}>Airbnb cleaning, organised.</p>
         </div>
+        {justReset && (
+          <div className="alert alert-success" style={{ marginBottom: 16 }}>
+            ✅ Password reset successfully. Sign in with your new password.
+          </div>
+        )}
         {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
 
         {/* Google Sign-In */}
@@ -85,7 +92,10 @@ export default function Login() {
               onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </div>
           <div className="form-group">
-            <label>Password</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <label style={{ margin: 0 }}>Password</label>
+              <Link to="/forgot-password" style={{ fontSize: 13, color: 'var(--primary)' }}>Forgot password?</Link>
+            </div>
             <input className="input" type="password" placeholder="••••••••" value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })} required />
           </div>
