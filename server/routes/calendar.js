@@ -38,7 +38,7 @@ router.get('/', auth, async (req, res) => {
       }),
       prisma.booking.findMany({
         where: { listingId: { in: listingIds } },
-        select: { id: true, listingId: true, checkinDate: true, checkoutDate: true, guestName: true },
+        select: { id: true, listingId: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
         orderBy: { checkoutDate: 'asc' },
       }),
       prisma.jobToken.findMany({
@@ -72,8 +72,10 @@ router.get('/', auth, async (req, res) => {
     const seenJobs = new Set();
 
     // Guest stays — primary source: Booking records (iCal-synced, listing-level)
+    // Skip manually blocked dates — they are not guest stays
     for (const booking of bookings) {
       if (!booking.checkinDate || !booking.checkoutDate) continue;
+      if (booking.type === 'blocked') continue;
       const listingName = allListings.find((l) => l.id === booking.listingId)?.name;
       const key = `${booking.listingId}|${dateKey(booking.checkinDate)}|${dateKey(booking.checkoutDate)}`;
       if (!seenStays.has(key)) {

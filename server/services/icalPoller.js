@@ -34,7 +34,10 @@ async function syncListing(listing) {
       if (!checkoutDate || checkoutDate < cutoff) continue;
 
       const icalUid = event.uid || `${listing.id}-${checkoutDate.toISOString()}`;
-      const guestName = event.summary || 'Airbnb Guest';
+      const summary = event.summary || '';
+      const isBlocked = /not available|airbnb \(not available\)|blocked/i.test(summary);
+      const type = isBlocked ? 'blocked' : 'guest';
+      const guestName = isBlocked ? 'Blocked' : (summary || 'Airbnb Guest');
 
       // Always upsert a Booking record regardless of rooms
       await prisma.booking.upsert({
@@ -45,17 +48,19 @@ async function syncListing(listing) {
           checkoutDate,
           guestName,
           icalUid,
+          type,
         },
         update: {
           checkinDate,
           checkoutDate,
           guestName,
+          type,
         },
       });
       bookingsSynced++;
 
-      // Only create cleaning jobs if the listing has rooms
-      if (rooms.length === 0) continue;
+      // Only create cleaning jobs for actual guest bookings (not blocked dates), and only if rooms exist
+      if (isBlocked || rooms.length === 0) continue;
 
       let createdCount = 0;
       for (const room of rooms) {

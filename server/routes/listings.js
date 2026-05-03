@@ -39,7 +39,7 @@ router.get('/', auth, async (req, res) => {
       orderBy: { createdAt: 'desc' },
       include: {
         bookings: {
-          select: { id: true, checkinDate: true, checkoutDate: true, guestName: true },
+          select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
           orderBy: { checkoutDate: 'asc' },
         },
       },

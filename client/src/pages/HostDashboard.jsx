@@ -44,12 +44,49 @@ function MiniCalendar({ jobs, bookings }) {
 
   // Deduplicate by checkin+checkout key so jobs don't double-mark days already covered by bookings
   const seenStays = new Set();
-  const allStays = [
-    ...(bookings || []).map((b) => ({ checkinDate: b.checkinDate, checkoutDate: b.checkoutDate })),
-    ...(jobs || []).map((j) => ({ checkinDate: j.checkinDate, checkoutDate: j.checkoutDate })),
-  ];
 
-  allStays.forEach(({ checkinDate, checkoutDate }) => {
+  // Process bookings first (authoritative source); blocked dates get their own colour
+  (bookings || []).forEach(({ checkinDate, checkoutDate, type }) => {
+    const checkout = checkoutDate ? new Date(checkoutDate) : null;
+    const checkin  = checkinDate  ? new Date(checkinDate)  : null;
+    if (!checkout) return;
+
+    const stayKey = `${checkin ? utcKey(checkin) : 'none'}|${utcKey(checkout)}`;
+    if (seenStays.has(stayKey)) return;
+    seenStays.add(stayKey);
+
+    const isBlocked = type === 'blocked';
+
+    if (isBlocked) {
+      // Mark entire blocked range grey (no checkin/checkout distinction)
+      if (checkin) {
+        const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate()));
+        const end = Date.UTC(checkout.getUTCFullYear(), checkout.getUTCMonth(), checkout.getUTCDate() + 1);
+        while (d.getTime() < end) {
+          dateMap[utcKey(d)] = 'blocked';
+          d.setUTCDate(d.getUTCDate() + 1);
+        }
+      } else {
+        dateMap[utcKey(checkout)] = 'blocked';
+      }
+      return;
+    }
+
+    if (checkout) dateMap[utcKey(checkout)] = 'checkout';
+    if (checkin && !dateMap[utcKey(checkin)]) dateMap[utcKey(checkin)] = 'checkin';
+
+    if (checkin && checkout) {
+      const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate() + 1));
+      const end = Date.UTC(checkout.getUTCFullYear(), checkout.getUTCMonth(), checkout.getUTCDate());
+      while (d.getTime() < end) {
+        if (!dateMap[utcKey(d)]) dateMap[utcKey(d)] = 'booked';
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+    }
+  });
+
+  // Fallback: jobs (for listings that haven't re-synced yet — no type field, always guest)
+  (jobs || []).forEach(({ checkinDate, checkoutDate }) => {
     const checkout = checkoutDate ? new Date(checkoutDate) : null;
     const checkin  = checkinDate  ? new Date(checkinDate)  : null;
     if (!checkout) return;
@@ -62,7 +99,6 @@ function MiniCalendar({ jobs, bookings }) {
     if (checkin && !dateMap[utcKey(checkin)]) dateMap[utcKey(checkin)] = 'checkin';
 
     if (checkin && checkout) {
-      // Fill booked days between day-after-checkin and day-before-checkout
       const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate() + 1));
       const end = Date.UTC(checkout.getUTCFullYear(), checkout.getUTCMonth(), checkout.getUTCDate());
       while (d.getTime() < end) {
@@ -108,6 +144,7 @@ function MiniCalendar({ jobs, bookings }) {
           let color = 'var(--ink)';
           let title = '';
 
+          if (status === 'blocked')  { bg = '#e5e7eb'; color = '#6b7280'; title = 'Blocked'; }
           if (status === 'booked')   { bg = '#fee2e2'; color = '#b91c1c'; title = 'Booked'; }
           if (status === 'checkin')  { bg = '#d1fae5'; color = '#065f46'; title = 'Check-in'; }
           if (status === 'checkout') { bg = '#fef3c7'; color = '#92400e'; title = 'Checkout / Cleaning'; }
@@ -143,6 +180,9 @@ function MiniCalendar({ jobs, bookings }) {
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fef3c7', display: 'inline-block' }} /> Checkout
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: '#e5e7eb', display: 'inline-block' }} /> Blocked
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, outline: '2px solid var(--teal)', display: 'inline-block' }} /> Today

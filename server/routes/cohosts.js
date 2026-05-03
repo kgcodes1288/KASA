@@ -141,7 +141,7 @@ router.get('/my-listings', authenticate2, async (req, res) => {
         include: {
           host: { select: { id: true, name: true } },
           bookings: {
-            select: { id: true, checkinDate: true, checkoutDate: true, guestName: true },
+            select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
             orderBy: { checkoutDate: 'asc' },
           },
         },
