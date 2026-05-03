@@ -6,7 +6,7 @@ const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
 async function syncListing(listing) {
   if (!listing.icalUrl) {
     console.log(`[iCal] Skipping ${listing.name} — no iCal URL configured`);
-    return { jobsCreated: 0, reason: 'no_url' };
+    return { jobsCreated: 0, bookingsSynced: 0, reason: 'no_url' };
   }
   try {
     console.log(`[iCal] Syncing listing: ${listing.name}`);
@@ -19,23 +19,43 @@ async function syncListing(listing) {
       include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
 
-    if (rooms.length === 0) {
-      console.log(`[iCal] No rooms for listing ${listing.name} — skipping`);
-      return { jobsCreated: 0, reason: 'no_rooms' };
-    }
-
     // iCal all-day dates are midnight UTC — normalize to noon UTC so
     // no timezone offset can shift the display date to the previous day
     const toNoonUTC = (d) => { const n = new Date(d); n.setUTCHours(12,0,0,0); return n; };
 
     // Track newly created jobs for digest (keyed by checkoutDate ISO string)
     const newJobsByDate = {};
+    let bookingsSynced = 0;
 
     for (const event of Object.values(events)) {
       if (event.type !== 'VEVENT') continue;
       const checkoutDate = event.end   ? toNoonUTC(event.end)   : null;
       const checkinDate  = event.start ? toNoonUTC(event.start) : null;
       if (!checkoutDate || checkoutDate < cutoff) continue;
+
+      const icalUid = event.uid || `${listing.id}-${checkoutDate.toISOString()}`;
+      const guestName = event.summary || 'Airbnb Guest';
+
+      // Always upsert a Booking record regardless of rooms
+      await prisma.booking.upsert({
+        where: { listingId_icalUid: { listingId: listing.id, icalUid } },
+        create: {
+          listingId: listing.id,
+          checkinDate,
+          checkoutDate,
+          guestName,
+          icalUid,
+        },
+        update: {
+          checkinDate,
+          checkoutDate,
+          guestName,
+        },
+      });
+      bookingsSynced++;
+
+      // Only create cleaning jobs if the listing has rooms
+      if (rooms.length === 0) continue;
 
       let createdCount = 0;
       for (const room of rooms) {
@@ -51,7 +71,7 @@ async function syncListing(listing) {
             cleanerId: listing.defaultCleanerId || null,
             checkoutDate,
             checkinDate,
-            guestName: event.summary || 'Airbnb Guest',
+            guestName,
             status: 'pending',
             checklistItems: {
               create: room.checklistItems.map((item) => ({ text: item.text })),
@@ -80,8 +100,8 @@ async function syncListing(listing) {
 
     const totalCreated = Object.values(newJobsByDate).reduce((sum, j) => sum + j.roomCount, 0);
     await prisma.listing.update({ where: { id: listing.id }, data: { lastSynced: new Date() } });
-    console.log(`[iCal] Sync complete for: ${listing.name} — ${totalCreated} job(s) created`);
-    return { jobsCreated: totalCreated, reason: 'ok' };
+    console.log(`[iCal] Sync complete for: ${listing.name} — ${bookingsSynced} booking(s) synced, ${totalCreated} job(s) created`);
+    return { jobsCreated: totalCreated, bookingsSynced, reason: rooms.length === 0 ? 'no_rooms' : 'ok' };
   } catch (err) {
     console.error(`[iCal] Error syncing listing ${listing.id}:`, err.message);
     throw err;

@@ -30,10 +30,15 @@ router.get('/', auth, async (req, res) => {
       return res.json({ listings: [], contractorNames: [], events: [] });
     }
 
-    const [jobs, tokens, contractors, myTasks] = await Promise.all([
+    const [jobs, bookings, tokens, contractors, myTasks] = await Promise.all([
       prisma.job.findMany({
         where: { listingId: { in: listingIds } },
         include: { cleaner: { select: { id: true, name: true, phone: true } } },
+        orderBy: { checkoutDate: 'asc' },
+      }),
+      prisma.booking.findMany({
+        where: { listingId: { in: listingIds } },
+        select: { id: true, listingId: true, checkinDate: true, checkoutDate: true, guestName: true },
         orderBy: { checkoutDate: 'asc' },
       }),
       prisma.jobToken.findMany({
@@ -66,10 +71,28 @@ router.get('/', auth, async (req, res) => {
     const seenStays = new Set();
     const seenJobs = new Set();
 
+    // Guest stays — primary source: Booking records (iCal-synced, listing-level)
+    for (const booking of bookings) {
+      if (!booking.checkinDate || !booking.checkoutDate) continue;
+      const listingName = allListings.find((l) => l.id === booking.listingId)?.name;
+      const key = `${booking.listingId}|${dateKey(booking.checkinDate)}|${dateKey(booking.checkoutDate)}`;
+      if (!seenStays.has(key)) {
+        seenStays.add(key);
+        events.push({
+          type: 'guest_stay',
+          listingId: booking.listingId,
+          listingName,
+          checkinDate: booking.checkinDate,
+          checkoutDate: booking.checkoutDate,
+          guestName: booking.guestName || 'Guest',
+        });
+      }
+    }
+
     for (const job of jobs) {
       const listingName = allListings.find((l) => l.id === job.listingId)?.name;
 
-      // Guest stay — deduplicated by listing + checkin + checkout
+      // Guest stay fallback — only emit if not already covered by a Booking record
       if (job.checkinDate && job.checkoutDate) {
         const key = `${job.listingId}|${dateKey(job.checkinDate)}|${dateKey(job.checkoutDate)}`;
         if (!seenStays.has(key)) {
