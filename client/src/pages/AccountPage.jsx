@@ -1061,8 +1061,8 @@ export default function AccountPage() {
     <div className="account-page">
       <div className="account-container">
 
-        {/* ── Email unverified banner ── */}
-        {user && user.emailVerified === false && (
+        {/* ── Email unverified banner (email/password accounts only) ── */}
+        {user && user.emailVerified === false && user.hasPassword && (
           <div style={{
             marginBottom: 20,
             padding: '12px 16px',
