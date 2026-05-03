@@ -139,10 +139,14 @@ router.get('/google/callback', async (req, res) => {
 
     if (user) {
       // Link Google ID if signing in via email match for the first time
-      if (!user.googleId) {
+      // Also mark email as verified — Google has confirmed ownership
+      if (!user.googleId || !user.emailVerified) {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { googleId: profile.id },
+          data: {
+            ...((!user.googleId) && { googleId: profile.id }),
+            emailVerified: true,
+          },
         });
       }
     } else {
