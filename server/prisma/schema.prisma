@@ -252,6 +252,7 @@ model Booking {
   checkoutDate DateTime
   guestName    String   @default("Airbnb Guest")
   icalUid      String
+  type         String   @default("guest")  // "guest" | "blocked"
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
