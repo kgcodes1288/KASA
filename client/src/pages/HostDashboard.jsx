@@ -45,9 +45,11 @@ function MiniCalendar({ jobs }) {
     const checkin  = job.checkinDate  ? new Date(job.checkinDate)  : null;
 
     if (checkout) dateMap[utcKey(checkout)] = 'checkout';
+    if (checkin && !dateMap[utcKey(checkin)]) dateMap[utcKey(checkin)] = 'checkin';
 
     if (checkin && checkout) {
-      const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate()));
+      // Fill booked days between day-after-checkin and day-before-checkout
+      const d = new Date(Date.UTC(checkin.getUTCFullYear(), checkin.getUTCMonth(), checkin.getUTCDate() + 1));
       const end = Date.UTC(checkout.getUTCFullYear(), checkout.getUTCMonth(), checkout.getUTCDate());
       while (d.getTime() < end) {
         if (!dateMap[utcKey(d)]) dateMap[utcKey(d)] = 'booked';
@@ -93,6 +95,7 @@ function MiniCalendar({ jobs }) {
           let title = '';
 
           if (status === 'booked')   { bg = '#fee2e2'; color = '#b91c1c'; title = 'Booked'; }
+          if (status === 'checkin')  { bg = '#d1fae5'; color = '#065f46'; title = 'Check-in'; }
           if (status === 'checkout') { bg = '#fef3c7'; color = '#92400e'; title = 'Checkout / Cleaning'; }
 
           return (
@@ -117,7 +120,10 @@ function MiniCalendar({ jobs }) {
         })}
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: 'var(--ink-ghost)' }}>
+      <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: 'var(--ink-ghost)', flexWrap: 'wrap' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: '#d1fae5', display: 'inline-block' }} /> Check-in
+        </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fee2e2', display: 'inline-block' }} /> Booked
         </span>
