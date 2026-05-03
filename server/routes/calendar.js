@@ -72,12 +72,25 @@ router.get('/', auth, async (req, res) => {
     const seenJobs = new Set();
 
     // Guest stays — primary source: Booking records (iCal-synced, listing-level)
-    // Skip manually blocked dates — they are not guest stays
     for (const booking of bookings) {
       if (!booking.checkinDate || !booking.checkoutDate) continue;
-      if (booking.type === 'blocked') continue;
       const listingName = allListings.find((l) => l.id === booking.listingId)?.name;
       const key = `${booking.listingId}|${dateKey(booking.checkinDate)}|${dateKey(booking.checkoutDate)}`;
+
+      // Manually blocked dates — emit as a separate type so the UI can style them differently
+      if (booking.type === 'blocked') {
+        if (!seenStays.has(key)) {
+          seenStays.add(key);
+          events.push({
+            type: 'blocked_date',
+            listingId: booking.listingId,
+            listingName,
+            checkinDate: booking.checkinDate,
+            checkoutDate: booking.checkoutDate,
+          });
+        }
+        continue;
+      }
       if (!seenStays.has(key)) {
         seenStays.add(key);
         events.push({
