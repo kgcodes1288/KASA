@@ -96,6 +96,10 @@ router.put('/:id', auth, async (req, res) => {
     const { name, entityType, checklist } = req.body;
     const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
 
+    // Snapshot old checklist texts before wiping them
+    const oldItems = await prisma.checklistTemplate.findMany({ where: { roomId: req.params.id } });
+    const oldTexts = new Set(oldItems.map((i) => i.text.trim().toLowerCase()));
+
     await prisma.checklistTemplate.deleteMany({ where: { roomId: req.params.id } });
     const updated = await prisma.room.update({
       where: { id: req.params.id },
@@ -111,6 +115,29 @@ router.put('/:id', auth, async (req, res) => {
       },
       include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
+
+    // Propagate newly added checklist items into pending/in_progress jobs for this room
+    const newTexts = (checklist || [])
+      .map((item) => (typeof item === 'string' ? item : item.text).trim())
+      .filter((t) => !oldTexts.has(t.toLowerCase()));
+
+    if (newTexts.length > 0) {
+      const activeJobs = await prisma.job.findMany({
+        where: { roomId: req.params.id, status: { in: ['pending', 'in_progress'] } },
+        include: { checklistItems: true },
+      });
+
+      for (const job of activeJobs) {
+        const existingJobTexts = new Set(job.checklistItems.map((c) => c.text.trim().toLowerCase()));
+        const toAdd = newTexts.filter((t) => !existingJobTexts.has(t.toLowerCase()));
+        if (toAdd.length > 0) {
+          await prisma.jobChecklist.createMany({
+            data: toAdd.map((text) => ({ jobId: job.id, text, done: false })),
+          });
+        }
+      }
+    }
+
     res.json({ ...updated, checklist: updated.checklistItems });
   } catch (err) {
     res.status(500).json({ message: err.message });
