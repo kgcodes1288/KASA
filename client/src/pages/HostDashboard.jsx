@@ -681,29 +681,29 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         </div>
       )}
 
+      {canEdit && (l._count?.rooms ?? 1) === 0 && (
+        <div style={{
+          marginBottom: 12,
+          padding: '6px 10px 6px 12px',
+          background: '#f0fdf4',
+          border: '1px solid #86efac',
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}>
+          <span style={{ fontSize: 12, color: '#166534', whiteSpace: 'nowrap' }}>No rooms set up yet</span>
+          <button className="btn btn-primary btn-sm" onClick={() => onSetupRooms(l)} style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+            🏠 Setup rooms
+          </button>
+        </div>
+      )}
+
       <div className="cluster">
         <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
           🏠 Manage Listing & Jobs
         </Link>
-        {canEdit && (l._count?.rooms ?? 1) === 0 && (
-          <div style={{
-            marginBottom: 10,
-            padding: '6px 10px 6px 12px',
-            background: '#f0fdf4',
-            border: '1px solid #86efac',
-            borderRadius: 8,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-            whiteSpace: 'nowrap',
-          }}>
-            <span style={{ fontSize: 12, color: '#166534' }}>No rooms set up yet</span>
-            <button className="btn btn-primary btn-sm" onClick={() => onSetupRooms(l)}>
-              🏠 Setup rooms
-            </button>
-          </div>
-        )}
 
         {canEdit && (
           <>
