@@ -144,6 +144,7 @@ router.get('/my-listings', authenticate2, async (req, res) => {
             select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
             orderBy: { checkoutDate: 'asc' },
           },
+          _count: { select: { rooms: true } },
         },
       },
     },
