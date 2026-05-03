@@ -324,4 +324,94 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
   console.log(`[email] Reminder sent to ${toEmail} for ${listingName}`);
 }
 
-module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail, sendCleaningDigestEmail, sendCleaningReminderEmail };
+/**
+ * Send an email verification link to a newly registered user.
+ */
+async function sendVerificationEmail({ to, name, verifyUrl }) {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0d9488;padding:24px 32px;">
+          <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">🧹 CleanStay</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Verify your email address</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+            Hi ${name}, thanks for signing up! Click the button below to verify your email address and activate your account.
+          </p>
+          <a href="${verifyUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Verify my email
+          </a>
+          <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
+            This link expires in 24 hours. If you didn't create an account, you can ignore this email.
+          </p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            You're receiving this because you signed up on <a href="${APP_URL}" style="color:#0d9488;text-decoration:none;">CleanStay</a>.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    await resend.emails.send({ from: FROM, to: [to], subject: 'Verify your CleanStay email address', html });
+    console.log(`[email] Verification email sent to ${to}`);
+  } catch (err) {
+    console.error(`[email] Failed to send verification to ${to}:`, err.message);
+  }
+}
+
+/**
+ * Send a password reset link.
+ */
+async function sendPasswordResetEmail({ to, name, resetUrl }) {
+  if (!process.env.RESEND_API_KEY) return;
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:540px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0d9488;padding:24px 32px;">
+          <p style="margin:0;font-size:20px;font-weight:700;color:#ffffff;">🧹 CleanStay</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Reset your password</p>
+          <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
+            Hi ${name}, we received a request to reset your password. Click the button below to choose a new one.
+          </p>
+          <a href="${resetUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
+            Reset my password
+          </a>
+          <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;">
+            This link expires in 1 hour. If you didn't request a password reset, you can ignore this email — your password won't change.
+          </p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
+          <p style="margin:0;font-size:12px;color:#9ca3af;">
+            Sent via <a href="${APP_URL}" style="color:#0d9488;text-decoration:none;">CleanStay</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  try {
+    await resend.emails.send({ from: FROM, to: [to], subject: 'Reset your CleanStay password', html });
+    console.log(`[email] Password reset email sent to ${to}`);
+  } catch (err) {
+    console.error(`[email] Failed to send password reset to ${to}:`, err.message);
+  }
+}
+
+module.exports = { sendNotificationEmail, sendDirectEmail, sendInviteEmail, sendCleaningDigestEmail, sendCleaningReminderEmail, sendVerificationEmail, sendPasswordResetEmail };

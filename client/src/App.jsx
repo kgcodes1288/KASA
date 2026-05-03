@@ -17,6 +17,9 @@ import ComplianceTerms from './pages/ComplianceTerms';
 import NotificationsPage from './pages/NotificationsPage';
 import AuthCallback from './pages/AuthCallback';
 import AdminPage from './pages/AdminPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -48,9 +51,12 @@ export default function App() {
       <NotificationProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login"    element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/login"            element={<Login />} />
+          <Route path="/register"         element={<Register />} />
+          <Route path="/forgot-password"  element={<ForgotPasswordPage />} />
+          <Route path="/reset-password"   element={<ResetPasswordPage />} />
+          <Route path="/verify-email"     element={<VerifyEmailPage />} />
+          <Route path="/auth/callback"    element={<AuthCallback />} />
           <Route path="/job/:token" element={<ContractorJob />} />
           <Route path="/maintenance/:token" element={<ContractorMaintenance />} />
           <Route path="/compliance-terms" element={<ComplianceTerms />} />
