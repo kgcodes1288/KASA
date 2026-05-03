@@ -24,7 +24,7 @@ function RoleBadge({ role }) {
 }
 
 // ── Mini Calendar Component ──────────────────────────────────────────────────
-function MiniCalendar({ jobs }) {
+function MiniCalendar({ jobs, bookings }) {
   const today = new Date();
   const [current, setCurrent] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
@@ -39,10 +39,24 @@ function MiniCalendar({ jobs }) {
   // Use UTC methods so dates stored as noon UTC aren't shifted by local timezone
   const utcKey = (d) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
 
+  // Build date map from bookings (primary) and fall back to jobs
   const dateMap = {};
-  jobs.forEach((job) => {
-    const checkout = job.checkoutDate ? new Date(job.checkoutDate) : null;
-    const checkin  = job.checkinDate  ? new Date(job.checkinDate)  : null;
+
+  // Deduplicate by checkin+checkout key so jobs don't double-mark days already covered by bookings
+  const seenStays = new Set();
+  const allStays = [
+    ...(bookings || []).map((b) => ({ checkinDate: b.checkinDate, checkoutDate: b.checkoutDate })),
+    ...(jobs || []).map((j) => ({ checkinDate: j.checkinDate, checkoutDate: j.checkoutDate })),
+  ];
+
+  allStays.forEach(({ checkinDate, checkoutDate }) => {
+    const checkout = checkoutDate ? new Date(checkoutDate) : null;
+    const checkin  = checkinDate  ? new Date(checkinDate)  : null;
+    if (!checkout) return;
+
+    const stayKey = `${checkin ? utcKey(checkin) : 'none'}|${utcKey(checkout)}`;
+    if (seenStays.has(stayKey)) return;
+    seenStays.add(stayKey);
 
     if (checkout) dateMap[utcKey(checkout)] = 'checkout';
     if (checkin && !dateMap[utcKey(checkin)]) dateMap[utcKey(checkin)] = 'checkin';
@@ -683,29 +697,41 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         </div>
       )}
 
-      <button
-        onClick={() => toggleCalendar(l.id)}
-        style={{
-          marginTop: 14,
-          width: '100%',
-          background: 'var(--bg)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '7px 12px',
-          fontSize: 13,
-          color: 'var(--ink-soft)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontFamily: 'var(--font-body)',
-        }}
-      >
-        <span>📅 Booking calendar {listingJobs.length > 0 ? `· ${new Set(listingJobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : j.id)).size} jobs synced` : '· no jobs yet'}</span>
-        <span>{showCal ? '▲' : '▼'}</span>
-      </button>
-
-      {showCal && <MiniCalendar jobs={listingJobs} />}
+      {(() => {
+        const bookings = l.bookings || [];
+        const bookingCount = bookings.length;
+        const calLabel = bookingCount > 0
+          ? `· ${bookingCount} booking${bookingCount !== 1 ? 's' : ''} synced`
+          : listingJobs.length > 0
+            ? `· ${new Set(listingJobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : j.id)).size} jobs synced`
+            : '· no bookings yet';
+        return (
+          <>
+            <button
+              onClick={() => toggleCalendar(l.id)}
+              style={{
+                marginTop: 14,
+                width: '100%',
+                background: 'var(--bg)',
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                padding: '7px 12px',
+                fontSize: 13,
+                color: 'var(--ink-soft)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              <span>📅 Booking calendar {calLabel}</span>
+              <span>{showCal ? '▲' : '▼'}</span>
+            </button>
+            {showCal && <MiniCalendar jobs={listingJobs} bookings={bookings} />}
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -794,7 +820,9 @@ const handleSync = async (id) => {
 
     // Surface a helpful message based on what happened
     if (data.reason === 'no_rooms') {
-      setSyncMessages((m) => ({ ...m, [id]: '⚠️ No rooms found — add rooms to this listing first so jobs can be created.' }));
+      const bCount = data.bookingsSynced ?? 0;
+      const bText = bCount > 0 ? `${bCount} booking${bCount !== 1 ? 's' : ''} synced to calendar` : 'Calendar synced';
+      setSyncMessages((m) => ({ ...m, [id]: `✓ ${bText} — add rooms to this listing to create cleaning jobs.` }));
     } else if (data.jobsCreated === 0) {
       setSyncMessages((m) => ({ ...m, [id]: '✓ Synced — no new bookings found in your calendar.' }));
     } else {

@@ -55,6 +55,7 @@ model Listing {
   defaultCleaner    User?             @relation("ListingDefaultCleaner", fields: [defaultCleanerId], references: [id], onDelete: SetNull)
   rooms             Room[]
   jobs              Job[]
+  bookings          Booking[]         @relation("ListingBookings")
   coHosts           ListingCoHost[]   @relation("CoHostListing")
   maintenanceTasks  MaintenanceTask[]
   jobTokens         JobToken[]
@@ -242,6 +243,22 @@ enum NotifType {
   CONTRACTOR_STARTED
   JOB_COMPLETED
   TASK_ASSIGNED
+}
+
+model Booking {
+  id           String   @id @default(cuid())
+  listingId    String
+  checkinDate  DateTime
+  checkoutDate DateTime
+  guestName    String   @default("Airbnb Guest")
+  icalUid      String
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  listing      Listing  @relation("ListingBookings", fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, icalUid])
 }
 
 model Contractor {

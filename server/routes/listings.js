@@ -37,6 +37,12 @@ router.get('/', auth, async (req, res) => {
     const listings = await prisma.listing.findMany({
       where: { hostId: req.user.id },
       orderBy: { createdAt: 'desc' },
+      include: {
+        bookings: {
+          select: { id: true, checkinDate: true, checkoutDate: true, guestName: true },
+          orderBy: { checkoutDate: 'asc' },
+        },
+      },
     });
     res.json(listings);
   } catch (err) {
@@ -134,6 +140,7 @@ router.post('/:id/sync', auth, async (req, res) => {
       message: 'Sync complete',
       lastSynced: updated.lastSynced,
       jobsCreated: result?.jobsCreated ?? 0,
+      bookingsSynced: result?.bookingsSynced ?? 0,
       reason: result?.reason ?? 'ok',
     });
   } catch (err) {
