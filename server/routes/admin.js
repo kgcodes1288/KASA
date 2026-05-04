@@ -135,7 +135,7 @@ router.post('/backfill-job-checklists', auth, adminOnly, async (req, res) => {
 
         if (toAdd.length > 0) {
           await prisma.jobChecklist.createMany({
-            data: toAdd.map((text) => ({ jobId: job.id, text, done: false })),
+            data: toAdd.map((text) => ({ jobId: job.id, text, completed: false })),
           });
           totalAdded += toAdd.length;
           log.push({ room: room.name, jobId: job.id, added: toAdd });
