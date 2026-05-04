@@ -132,7 +132,7 @@ router.put('/:id', auth, async (req, res) => {
         const toAdd = newTexts.filter((t) => !existingJobTexts.has(t.toLowerCase()));
         if (toAdd.length > 0) {
           await prisma.jobChecklist.createMany({
-            data: toAdd.map((text) => ({ jobId: job.id, text, done: false })),
+            data: toAdd.map((text) => ({ jobId: job.id, text, completed: false })),
           });
         }
       }
