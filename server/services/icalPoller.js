@@ -79,7 +79,9 @@ async function syncListing(listing) {
             guestName,
             status: 'pending',
             checklistItems: {
-              create: room.checklistItems.map((item) => ({ text: item.text })),
+              create: room.checklistItems.length > 0
+                ? room.checklistItems.map((item) => ({ text: item.text }))
+                : [{ text: 'Done' }],
             },
           },
         });
