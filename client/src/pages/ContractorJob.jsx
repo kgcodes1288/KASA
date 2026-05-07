@@ -7,7 +7,8 @@ const STATUS_LABEL = {
   completed:   '✅ Done',
 };
 
-const BASE = import.meta.env.VITE_API_URL || '/api';
+const _rawBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
+const BASE = _rawBase ? `${_rawBase}/api` : '/api';
 
 export default function ContractorJob() {
   const { token } = useParams();
@@ -19,12 +20,12 @@ export default function ContractorJob() {
 
   useEffect(() => {
     fetch(`${BASE}/public/job/${token}`)
-      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then((res) => res.json().then((body) => ({ ok: res.ok, status: res.status, body })))
       .then(({ ok, body }) => {
         if (!ok) setError(body.message || 'Something went wrong');
         else setData(body);
       })
-      .catch(() => setError('Something went wrong'))
+      .catch(() => setError('network_error'))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -71,22 +72,43 @@ export default function ContractorJob() {
   );
 
   // ── Error ────────────────────────────────────────────────────────────────
-  if (error) return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', justifyContent: 'center',
-      alignItems: 'center', minHeight: '100vh', background: '#f8fafc', padding: 24,
-    }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
-      <h2 style={{ marginBottom: 8, color: '#1e293b' }}>
-        {error === 'This link has expired' ? 'Link Expired' : 'Invalid Link'}
-      </h2>
-      <p style={{ color: '#64748b', textAlign: 'center', maxWidth: 320 }}>
-        {error === 'This link has expired'
-          ? 'This job link has expired. Please contact the host for a new link.'
-          : 'This link is invalid or has already been used. Please contact the host.'}
-      </p>
-    </div>
-  );
+  if (error) {
+    const isExpired    = error === 'This link has expired';
+    const isWithdrawn  = error === 'This job assignment has been withdrawn';
+    const isNetwork    = error === 'network_error';
+
+    return (
+      <div style={{
+        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        alignItems: 'center', minHeight: '100vh', background: '#f8fafc', padding: 24,
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>
+          {isNetwork ? '📡' : isExpired ? '⏰' : isWithdrawn ? '🚫' : '🔗'}
+        </div>
+        <h2 style={{ marginBottom: 8, color: '#1e293b' }}>
+          {isNetwork ? 'Connection Error' : isExpired ? 'Link Expired' : isWithdrawn ? 'Assignment Withdrawn' : 'Invalid Link'}
+        </h2>
+        <p style={{ color: '#64748b', textAlign: 'center', maxWidth: 320 }}>
+          {isNetwork
+            ? 'Could not reach the server. Please check your connection and try again.'
+            : isExpired
+            ? 'This job link has expired. Please contact the host for a new link.'
+            : isWithdrawn
+            ? 'This job assignment has been withdrawn by the host. Please contact them directly.'
+            : 'This link is invalid or has already been used. Please contact the host.'}
+        </p>
+        {isNetwork && (
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 20 }}
+            onClick={() => window.location.reload()}
+          >
+            Try Again
+          </button>
+        )}
+      </div>
+    );
+  }
 
   // ── Job Page ─────────────────────────────────────────────────────────────
   const allDone = data.rooms.every((r) => r.status === 'completed');
