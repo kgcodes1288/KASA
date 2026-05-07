@@ -621,7 +621,7 @@ function CoHostSection() {
                                 <span style={{ fontSize: 14, fontWeight: 500 }}>
                                   {ch.user?.name || ch.inviteEmail}
                                 </span>
-                                {ch.inviteEmail && (
+                                {ch.user?.name && ch.inviteEmail && (
                                   <span style={{ fontSize: 12, color: 'var(--ink-ghost)', marginLeft: 6 }}>
                                     {ch.inviteEmail}
                                   </span>
@@ -935,6 +935,7 @@ const styles = {
     padding: '2px 6px',
     borderRadius: 20,
     marginLeft: 8,
+    whiteSpace: 'nowrap',
     backgroundColor: status === 'ACCEPTED' ? '#d1fae5' : status === 'PENDING' ? '#fef3c7' : '#fee2e2',
     color: status === 'ACCEPTED' ? '#065f46' : status === 'PENDING' ? '#92400e' : '#991b1b',
   }),
@@ -944,6 +945,7 @@ const styles = {
     padding: '2px 6px',
     borderRadius: 20,
     marginLeft: 6,
+    whiteSpace: 'nowrap',
     backgroundColor: role === 'COHOST' ? '#ede9fe' : '#f0fdf4',
     color: role === 'COHOST' ? '#6d28d9' : '#15803d',
     border: `1px solid ${role === 'COHOST' ? '#c4b5fd' : '#86efac'}`,
