@@ -1309,16 +1309,15 @@ export default function ListingDetail() {
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                                         {checklist.map((ci) => (
-                                          <label key={ci.id}
-                                            style={{ display: 'flex', alignItems: 'flex-start', gap: 9,
-                                              cursor: togglingItem === ci.id ? 'wait' : 'pointer',
-                                              opacity: togglingItem === ci.id ? 0.5 : 1 }}>
+                                          <div key={ci.id}
+                                            style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
                                             <input
                                               type="checkbox"
                                               checked={!!ci.completed}
-                                              disabled={togglingItem === ci.id}
-                                              onChange={() => handleToggleChecklistItem(r.jobId, ci.id, ci.completed)}
-                                              style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, marginTop: 2 }}
+                                              readOnly
+                                              style={{ width: 15, height: 15, flexShrink: 0, marginTop: 2,
+                                                cursor: 'default', pointerEvents: 'none',
+                                                accentColor: '#10b981' }}
                                             />
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                               <span style={{ fontSize: 12, color: colorSet.color,
@@ -1332,7 +1331,7 @@ export default function ListingDetail() {
                                                 </span>
                                               )}
                                             </div>
-                                          </label>
+                                          </div>
                                         ))}
                                       </div>
                                     )}
