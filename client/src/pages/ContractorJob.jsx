@@ -17,17 +17,35 @@ export default function ContractorJob() {
   const [loading, setLoading]             = useState(true);
   const [expandedRooms, setExpandedRooms] = useState({});
   const [togglingItem, setTogglingItem]   = useState(null);
+  const [accepted, setAccepted]           = useState(false);
+  const [accepting, setAccepting]         = useState(false);
 
   useEffect(() => {
     fetch(`${BASE}/public/job/${token}`)
-      .then((res) => res.json().then((body) => ({ ok: res.ok, status: res.status, body })))
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
       .then(({ ok, body }) => {
         if (!ok) setError(body.message || 'Something went wrong');
-        else setData(body);
+        else {
+          setData(body);
+          // If already accepted, reflect that in state
+          if (body.tokenStatus === 'ACCEPTED') setAccepted(true);
+        }
       })
       .catch(() => setError('network_error'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const handleAccept = async () => {
+    setAccepting(true);
+    try {
+      const res = await fetch(`${BASE}/public/job/${token}/accept`, { method: 'POST' });
+      if (res.ok) setAccepted(true);
+    } catch (err) {
+      console.error('Failed to accept job', err);
+    } finally {
+      setAccepting(false);
+    }
+  };
 
   const toggleRoom = (jobId) =>
     setExpandedRooms((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
@@ -73,9 +91,9 @@ export default function ContractorJob() {
 
   // ── Error ────────────────────────────────────────────────────────────────
   if (error) {
-    const isExpired    = error === 'This link has expired';
-    const isWithdrawn  = error === 'This job assignment has been withdrawn';
-    const isNetwork    = error === 'network_error';
+    const isExpired   = error === 'This link has expired';
+    const isWithdrawn = error === 'This job assignment has been withdrawn';
+    const isNetwork   = error === 'network_error';
 
     return (
       <div style={{
@@ -124,16 +142,58 @@ export default function ContractorJob() {
         }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🧹</div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
-            {data.listingName}
+            {data.listing?.name}
           </h1>
           <p style={{ fontSize: 14, color: '#64748b', marginBottom: 2 }}>
             📅 Checkout: {new Date(data.checkoutDate).toLocaleDateString('en-US', {
               weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC',
             })}
           </p>
-          {data.listingAddress && (
-            <p style={{ fontSize: 13, color: '#94a3b8' }}>📍 {data.listingAddress}</p>
+          {data.listing?.address && (
+            <p style={{ fontSize: 13, color: '#94a3b8' }}>📍 {data.listing.address}</p>
           )}
+
+          {/* Accept banner — shown until contractor accepts */}
+          {!accepted && (
+            <div style={{
+              marginTop: 16, padding: '14px 16px',
+              background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            }}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#1d4ed8', marginBottom: 2 }}>
+                  New job assigned to you
+                </p>
+                <p style={{ fontSize: 12, color: '#3b82f6' }}>
+                  Tap Accept to confirm you'll take this job
+                </p>
+              </div>
+              <button
+                onClick={handleAccept}
+                disabled={accepting}
+                style={{
+                  background: '#2563eb', color: '#fff', border: 'none',
+                  borderRadius: 8, padding: '8px 16px', fontSize: 13,
+                  fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+              >
+                {accepting ? 'Accepting…' : '✓ Accept Job'}
+              </button>
+            </div>
+          )}
+
+          {/* Accepted confirmation */}
+          {accepted && !allDone && (
+            <div style={{
+              marginTop: 14, padding: '10px 14px', background: '#d1fae5',
+              border: '1px solid #6ee7b7', borderRadius: 10,
+              fontSize: 13, fontWeight: 600, color: '#065f46',
+            }}>
+              ✅ Job accepted — check off tasks as you go
+            </div>
+          )}
+
+          {/* All done */}
           {allDone && (
             <div style={{
               marginTop: 14, padding: '10px 14px', background: '#d1fae5',
