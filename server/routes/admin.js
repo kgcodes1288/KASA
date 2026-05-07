@@ -149,4 +149,29 @@ router.post('/backfill-job-checklists', auth, adminOnly, async (req, res) => {
   }
 });
 
+// POST /api/admin/backfill-default-checklist
+// One-time: adds a default "Done" checklist item to all pending/in_progress jobs with no checklist items
+router.post('/backfill-default-checklist', auth, adminOnly, async (req, res) => {
+  try {
+    const jobs = await prisma.job.findMany({
+      where: { status: { in: ['pending', 'in_progress'] } },
+      include: { _count: { select: { checklistItems: true } } },
+    });
+
+    const empty = jobs.filter((j) => j._count.checklistItems === 0);
+
+    if (empty.length === 0) {
+      return res.json({ message: 'No jobs need backfilling.', count: 0 });
+    }
+
+    await prisma.jobChecklist.createMany({
+      data: empty.map((j) => ({ jobId: j.id, text: 'Done', completed: false })),
+    });
+
+    res.json({ message: `Added default checklist item to ${empty.length} job(s).`, count: empty.length });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 module.exports = router;
