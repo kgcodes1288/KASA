@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
-const BASE = import.meta.env.VITE_API_URL || '/api';
+const _rawBase = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
+const BASE = _rawBase ? `${_rawBase}/api` : '/api';
 
 export default function ContractorMaintenance() {
   const { token } = useParams();
