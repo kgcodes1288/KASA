@@ -3,6 +3,7 @@ import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { isDelegated } from '../managementTypes';
+import HostOverview from '../components/HostOverview';
 
 /* ── Room / Appliance / Space modal ── */
 function RoomModal({ listingId, onClose, onSaved, room }) {
@@ -725,7 +726,7 @@ export default function ListingDetail() {
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
-  const pm = isDelegated(listing); // run by a co-host on the owner's behalf: no room/cleaning/job tooling
+  const pm = isDelegated(listing) && listing.hostId === currentUser?.id; // owner who delegated to a co-host: overview instead of room/cleaning/job tooling (the co-host keeps those)
 
   return (
     <div className="page">
@@ -753,16 +754,7 @@ export default function ListingDetail() {
         )}
       </div>
 
-      {pm && (
-        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
-          <div style={{ fontSize: 36 }}>🏢</div>
-          <h3 style={{ marginTop: 8 }}>Managed by your co-host</h3>
-          <p style={{ marginTop: 6 }}>
-            Room setup, cleaning tasks and jobs are handled by your co-host, so they're hidden here.
-            Your booking calendar is on the dashboard. If you manage this property yourself, switch it back with Edit on the dashboard.
-          </p>
-        </div>
-      )}
+      {pm && <HostOverview listing={listing} currentUser={currentUser} canWrite={canManageTasks} />}
 
       {/* Tabs */}
       {!pm && (

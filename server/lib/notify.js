@@ -104,6 +104,14 @@ async function notifyListingMembers(listingId, type, title, message, excludeUser
  * newJobs: [{ checkoutDate, roomCount }]
  * assigneeId: if set, notify only that person; otherwise notify host + co-hosts.
  */
+// Who hears about unassigned cleaning jobs. When the owner delegates a listing
+// to a co-host, the co-host(s) run turnovers, so the owner is left out.
+function cleaningRecipients(listing) {
+  const coHostIds = listing.coHosts.map((c) => c.userId).filter(Boolean);
+  if (listing.managementType === 'HOST_WITH_COHOST' && coHostIds.length) return [...new Set(coHostIds)];
+  return [...new Set([listing.hostId, ...coHostIds])];
+}
+
 async function notifyCleaningDigest(listingId, newJobs, assigneeId = null) {
   if (!newJobs.length) return;
   try {
@@ -117,7 +125,7 @@ async function notifyCleaningDigest(listingId, newJobs, assigneeId = null) {
     // If unassigned, host + all co-hosts are notified.
     const ids = assigneeId
       ? [assigneeId]
-      : [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+      : cleaningRecipients(listing);
     if (!ids.length) return;
 
     const title   = `${newJobs.length} new cleaning job${newJobs.length !== 1 ? 's' : ''} added`;
@@ -187,7 +195,7 @@ async function sendDayOfReminders() {
       // Assigned → notify only the assignee. Unassigned → host + co-hosts.
       const ids = cleanerId
         ? [cleanerId]
-        : [...new Set([listing.hostId, ...listing.coHosts.map((c) => c.userId).filter(Boolean)])];
+        : cleaningRecipients(listing);
 
       const title   = '🔔 Cleaning reminder — checkout today';
       const message = `${jobSummary.length > 1 ? `${jobSummary.length} checkouts` : 'A checkout'} today at ${listing.name}`;
