@@ -14,7 +14,7 @@ async function hasAccess(listingId, userId) {
   return { listing, ok: !!coHost, isOwner: false };
 }
 
-const MANAGEMENT_TYPES = ['SELF', 'COHOST', 'PM_COMPANY'];
+const MANAGEMENT_TYPES = ['SELF', 'COHOST', 'HOST_WITH_COHOST'];
 
 // Combine street + city into the legacy single-line address
 const composeAddress = (street, city) => [street, city].filter(Boolean).join(', ') || null;
