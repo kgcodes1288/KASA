@@ -28,6 +28,7 @@ app.use('/api/public',      require('./routes/public'));
 app.use('/api/upload',      require('./routes/upload'));
 app.use('/api/calendar',       require('./routes/calendar'));
 app.use('/api/notifications',  require('./routes/notifications'));
+app.use('/api/mcp',            require('./routes/mcp'));
 app.use('/api/email',          require('./routes/email'));
 app.use('/api/admin',          require('./routes/admin'));
 app.use('/api/unsubscribe',    require('./routes/unsubscribe'));
