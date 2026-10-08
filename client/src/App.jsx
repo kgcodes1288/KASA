@@ -20,6 +20,7 @@ import AdminPage from './pages/AdminPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
+import Connect from './pages/Connect';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="/reset-password"   element={<ResetPasswordPage />} />
           <Route path="/verify-email"     element={<VerifyEmailPage />} />
           <Route path="/auth/callback"    element={<AuthCallback />} />
+          <Route path="/connect"          element={<Connect />} />
           <Route path="/job/:token" element={<ContractorJob />} />
           <Route path="/maintenance/:token" element={<ContractorMaintenance />} />
           <Route path="/compliance-terms" element={<ComplianceTerms />} />

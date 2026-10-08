@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { consumePostLoginRedirect } from '../postLoginRedirect';
 
 export default function AuthCallback() {
   const [searchParams] = useSearchParams();
@@ -28,7 +29,7 @@ export default function AuthCallback() {
     api.get('/auth/me')
       .then(({ data }) => {
         loginWithToken(token, data);
-        navigate(data.role === 'host' ? '/host' : '/cleaner');
+        navigate(consumePostLoginRedirect() || (data.role === 'host' ? '/host' : '/cleaner'));
       })
       .catch((err) => {
         localStorage.removeItem('token');

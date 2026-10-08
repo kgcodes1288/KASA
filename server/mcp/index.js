@@ -6,7 +6,7 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 const { mcpAuthRouter, getOAuthProtectedResourceMetadataUrl } = require('@modelcontextprotocol/sdk/server/auth/router.js');
 const { requireBearerAuth } = require('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
 const prisma = require('../lib/prisma');
-const { provider, handleConsent, SCOPES } = require('./oauthProvider');
+const { provider, SCOPES } = require('./oauthProvider');
 const { registerTools } = require('./tools');
 
 const BASE = new URL(process.env.MCP_PUBLIC_URL || 'http://localhost:5100');
@@ -26,9 +26,6 @@ app.use(mcpAuthRouter({
   resourceName: 'CleanStay',
   resourceServerUrl: MCP_URL,
 }));
-
-// The sign-in / consent form posts here
-app.post('/oauth/consent', express.urlencoded({ extended: false }), (req, res, next) => handleConsent(req, res).catch(next));
 
 // The MCP endpoint (stateless Streamable HTTP)
 const bearer = requireBearerAuth({
