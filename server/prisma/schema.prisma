@@ -32,6 +32,8 @@ model User {
   assignedByTasks           MaintenanceTask[] @relation("TaskAssignedBy")
   contractors               Contractor[]
   notifications             Notification[]
+  oauthCodes                OAuthCode[]
+  oauthTokens               OAuthToken[]
 }
 
 enum Role {
@@ -297,4 +299,58 @@ model Contractor {
   smsConsent Boolean @default(false)
 
   host      User     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+}
+// ── MCP connector (OAuth 2.1 for chat apps like Claude, ChatGPT, Gemini) ─────
+
+model OAuthClient {
+  id        String   @id @default(cuid())
+  clientId  String   @unique
+  metadata  Json
+  createdAt DateTime @default(now())
+}
+
+model OAuthCode {
+  id            String    @id @default(cuid())
+  codeHash      String    @unique
+  clientId      String
+  userId        String
+  scopes        String[]
+  codeChallenge String
+  redirectUri   String
+  resource      String?
+  expiresAt     DateTime
+  usedAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OAuthToken {
+  id               String    @id @default(cuid())
+  accessHash       String    @unique
+  refreshHash      String?   @unique
+  clientId         String
+  userId           String
+  scopes           String[]
+  resource         String?
+  accessExpiresAt  DateTime
+  refreshExpiresAt DateTime?
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model McpAuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  clientId  String?
+  tool      String
+  isWrite   Boolean  @default(false)
+  ok        Boolean
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

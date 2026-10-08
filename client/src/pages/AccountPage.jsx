@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useNavigate, Link } from 'react-router-dom';
 import HowToUseSection from '../components/HowToUseSection';
+import ConnectedApps from '../components/ConnectedApps';
 import api from '../api';
 import './AccountPage.css';
 
@@ -953,7 +954,7 @@ const styles = {
 };
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-const ALL_TABS    = ['Profile', 'Security', 'Co-hosts', 'Contractors', 'Notifications'];
+const ALL_TABS    = ['Profile', 'Security', 'Co-hosts', 'Contractors', 'Chat assistants', 'Notifications'];
 const CLEANER_TABS = ['Profile', 'Security', 'Notifications'];
 
 // ── Main Account Page ────────────────────────────────────────────────────────
@@ -1124,7 +1125,7 @@ export default function AccountPage() {
               key={tab}
               onClick={() => setActiveTab(tab)}
               style={{
-                padding: '10px 18px',
+                padding: '10px 14px', whiteSpace: 'nowrap',
                 fontSize: 14,
                 fontWeight: activeTab === tab ? 700 : 500,
                 color: activeTab === tab ? 'var(--primary)' : 'var(--ink-soft)',
@@ -1281,6 +1282,9 @@ export default function AccountPage() {
 
         {/* ── Contractors Tab (hosts only) ── */}
         {activeTab === 'Contractors' && <ContractorsSection />}
+
+        {/* ── Chat assistants (MCP connector) ── */}
+        {activeTab === 'Chat assistants' && <ConnectedApps />}
 
         {/* ── Notifications Tab ── */}
         {activeTab === 'Notifications' && <NotificationsTab />}
