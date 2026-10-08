@@ -60,8 +60,8 @@ async function syncListing(listing) {
       bookingsSynced++;
 
       // Only create cleaning jobs for actual guest bookings (not blocked dates), and only if rooms exist
-      // Listings run by a property management company don't get cleaning jobs
-      if (isBlocked || rooms.length === 0 || listing.managementType === 'PM_COMPANY') continue;
+      // Listings the owner has delegated to a co-host don't get cleaning jobs
+      if (isBlocked || rooms.length === 0 || listing.managementType === 'HOST_WITH_COHOST') continue;
 
       let createdCount = 0;
       for (const room of rooms) {

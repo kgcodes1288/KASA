@@ -5,7 +5,7 @@ import HowToUseSection from '../components/HowToUseSection';
 import { useAuth } from '../context/AuthContext';
 import AccountCalendar from './AccountCalendar';
 import RoomSetupWizard from '../components/RoomSetupWizard';
-import { MANAGEMENT_TYPES, isPM, managementLabel } from '../managementTypes';
+import { MANAGEMENT_TYPES, isDelegated, managementLabel } from '../managementTypes';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -687,7 +687,7 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, onSetupRooms, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
-  const pm = isPM(l); // property run by a management company: hide cleaning/turnover tooling
+  const pm = isDelegated(l); // property run by a co-host on the owner's behalf: hide cleaning/turnover tooling
 
   // Build "Co-hosted with …" text from accepted co-hosts
   const coHostNames = (coHosts || []).map((ch) => ch.user?.name).filter(Boolean);
@@ -1121,7 +1121,7 @@ const handleSync = async (id) => {
             setShowModal(false);
             load();
             // Auto-open room wizard after creating a new listing
-            if (newListing && !editTarget && !isPM(newListing)) setWizardListing(newListing);
+            if (newListing && !editTarget && !isDelegated(newListing)) setWizardListing(newListing);
           }}
         />
       )}

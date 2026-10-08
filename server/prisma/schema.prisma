@@ -67,7 +67,7 @@ model Listing {
 enum ManagementType {
   SELF
   COHOST
-  PM_COMPANY
+  HOST_WITH_COHOST
 }
 
 model ListingCoHost {
