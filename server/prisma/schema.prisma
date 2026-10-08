@@ -43,6 +43,9 @@ model Listing {
   id          String    @id @default(cuid())
   name        String
   address     String?
+  street      String?
+  city        String?
+  managementType ManagementType @default(SELF)
   icalUrl     String?
   lastSynced  DateTime?
   createdAt   DateTime  @default(now())
@@ -59,6 +62,12 @@ model Listing {
   coHosts           ListingCoHost[]   @relation("CoHostListing")
   maintenanceTasks  MaintenanceTask[]
   jobTokens         JobToken[]
+}
+
+enum ManagementType {
+  SELF
+  COHOST
+  PM_COMPANY
 }
 
 model ListingCoHost {

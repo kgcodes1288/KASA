@@ -14,16 +14,33 @@ async function hasAccess(listingId, userId) {
   return { listing, ok: !!coHost, isOwner: false };
 }
 
+const MANAGEMENT_TYPES = ['SELF', 'COHOST', 'PM_COMPANY'];
+
+// Combine street + city into the legacy single-line address
+const composeAddress = (street, city) => [street, city].filter(Boolean).join(', ') || null;
+
 // POST /api/listings
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host')
     return res.status(403).json({ message: 'Only hosts can create listings' });
   try {
-    const { name, address, icalUrl } = req.body;
+    const { name, street, city, managementType, icalUrl } = req.body;
     if (!name)
       return res.status(400).json({ message: 'Listing name is required' });
+    if (!city || !city.trim())
+      return res.status(400).json({ message: 'City is required' });
+    if (!MANAGEMENT_TYPES.includes(managementType))
+      return res.status(400).json({ message: 'Please select how this property is managed' });
     const listing = await prisma.listing.create({
-      data: { name, address: address || null, icalUrl: icalUrl || null, hostId: req.user.id },
+      data: {
+        name,
+        street: street?.trim() || null,
+        city: city.trim(),
+        address: composeAddress(street?.trim(), city.trim()),
+        managementType,
+        icalUrl: icalUrl || null,
+        hostId: req.user.id,
+      },
     });
     res.status(201).json(listing);
   } catch (err) {
@@ -71,12 +88,26 @@ router.put('/:id', auth, async (req, res) => {
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
     if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
-    const { name, address, icalUrl, defaultCleanerId } = req.body;
+    const { name, street, city, managementType, icalUrl, defaultCleanerId } = req.body;
+    if (managementType !== undefined && !MANAGEMENT_TYPES.includes(managementType))
+      return res.status(400).json({ message: 'Invalid management type' });
+    if ((city !== undefined || street !== undefined) && !(city ?? listing.city)?.trim())
+      return res.status(400).json({ message: 'City is required' });
+    // Only the owner decides how the property is managed
+    if (managementType !== undefined && managementType !== listing.managementType && listing.hostId !== req.user.id)
+      return res.status(403).json({ message: 'Only the owner can change this' });
+    const newStreet = street !== undefined ? (street?.trim() || null) : listing.street;
+    const newCity = city !== undefined ? city.trim() : listing.city;
     const updated = await prisma.listing.update({
       where: { id: req.params.id },
       data: {
         ...(name !== undefined && { name }),
-        ...(address !== undefined && { address }),
+        ...((street !== undefined || city !== undefined) && {
+          street: newStreet,
+          city: newCity,
+          address: composeAddress(newStreet, newCity),
+        }),
+        ...(managementType !== undefined && { managementType }),
         ...(icalUrl !== undefined && { icalUrl }),
         ...('defaultCleanerId' in req.body && { defaultCleanerId: defaultCleanerId || null }),
       },

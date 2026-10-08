@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { isPM } from '../managementTypes';
 
 /* ── Room / Appliance / Space modal ── */
 function RoomModal({ listingId, onClose, onSaved, room }) {
@@ -724,6 +725,7 @@ export default function ListingDetail() {
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
+  const pm = isPM(listing); // run by a management company: no room/cleaning/job tooling
 
   return (
     <div className="page">
@@ -736,7 +738,7 @@ export default function ListingDetail() {
           <h1>{listing.name}</h1>
           {listing.address && <p>📍 {listing.address}</p>}
         </div>
-        {canManageTasks && (
+        {canManageTasks && !pm && (
           <button
             onClick={() => setSettingsModal(true)}
             title="Listing settings"
@@ -751,7 +753,19 @@ export default function ListingDetail() {
         )}
       </div>
 
+      {pm && (
+        <div className="card" style={{ textAlign: 'center', padding: 32 }}>
+          <div style={{ fontSize: 36 }}>🏢</div>
+          <h3 style={{ marginTop: 8 }}>Managed by a property management company</h3>
+          <p style={{ marginTop: 6 }}>
+            Room setup, cleaning tasks and jobs are handled by your management company, so they're hidden here.
+            Your booking calendar is on the dashboard. If you manage this property yourself, switch it back with Edit on the dashboard.
+          </p>
+        </div>
+      )}
+
       {/* Tabs */}
+      {!pm && (
       <div className="cluster" style={{ marginBottom: 24 }}>
         {[
           { key: 'spaces', label: `🏠 Spaces & Appliances (${allRooms.length})` },
@@ -763,9 +777,10 @@ export default function ListingDetail() {
           </button>
         ))}
       </div>
+      )}
 
       {/* ── Spaces & Appliances tab ── */}
-      {tab === 'spaces' && (
+      {!pm && tab === 'spaces' && (
         <>
           <div className="section-header" style={{ gap: 16 }}>
             <h2>Spaces & Appliances</h2>
@@ -912,7 +927,7 @@ export default function ListingDetail() {
       )}
 
       {/* ── Jobs tab ── */}
-      {tab === 'jobs' && (() => {
+      {!pm && tab === 'jobs' && (() => {
         const maintItems = maintRooms.flatMap((r) =>
           (r.maintenanceTasks || []).map((t) => ({
             _type: 'maintenance',

@@ -5,6 +5,7 @@ import HowToUseSection from '../components/HowToUseSection';
 import { useAuth } from '../context/AuthContext';
 import AccountCalendar from './AccountCalendar';
 import RoomSetupWizard from '../components/RoomSetupWizard';
+import { MANAGEMENT_TYPES, isPM, managementLabel } from '../managementTypes';
 
 // ── Role Badge ───────────────────────────────────────────────────────────────
 function RoleBadge({ role }) {
@@ -194,9 +195,9 @@ function MiniCalendar({ jobs, bookings }) {
 }
 
 // ── Listing Modal ────────────────────────────────────────────────────────────
-function ListingModal({ onClose, onSaved, listing }) {
+function ListingModal({ onClose, onSaved, listing, canChangeRole = true }) {
   const editing = !!listing;
-  const [form, setForm] = useState(listing || { name: '', address: '', icalUrl: '' });
+  const [form, setForm] = useState(listing ? { ...listing, street: listing.street || '', city: listing.city || '', icalUrl: listing.icalUrl || '' } : { name: '', street: '', city: '', managementType: '', icalUrl: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -204,13 +205,17 @@ function ListingModal({ onClose, onSaved, listing }) {
 
   const handleSave = async () => {
     if (!form.name) { setError('Listing name is required'); return; }
+    if (!form.city?.trim()) { setError('City is required'); return; }
+    if (!form.managementType) { setError('Please select how this property is managed'); return; }
     setSaving(true); setError('');
     // Send only the fields the API expects — don't spread the full listing
     // object (which includes id, hostId, createdAt, etc.) into the body
     const payload = {
       name:    form.name,
-      address: form.address  || null,
+      street:  form.street?.trim() || null,
+      city:    form.city.trim(),
       icalUrl: form.icalUrl  || null,
+      ...(canChangeRole && { managementType: form.managementType }),
     };
     try {
       if (editing) {
@@ -240,9 +245,43 @@ function ListingModal({ onClose, onSaved, listing }) {
           <input className="input" placeholder="Beach House #1" value={form.name} onChange={(e) => set('name', e.target.value)} maxLength={80} />
         </div>
         <div className="form-group">
-          <label>Address (optional)</label>
-          <input className="input" placeholder="123 Ocean Drive, Miami" value={form.address} onChange={(e) => set('address', e.target.value)} />
+          <label>Street name <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+          <input className="input" placeholder="Ocean Drive" value={form.street} onChange={(e) => set('street', e.target.value)} />
         </div>
+        <div className="form-group">
+          <label>City</label>
+          <input className="input" placeholder="Miami" value={form.city} onChange={(e) => set('city', e.target.value)} />
+        </div>
+        {canChangeRole && (
+          <div className="form-group">
+            <label>How is this property managed?</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
+              {MANAGEMENT_TYPES.map((t) => {
+                const selected = form.managementType === t.value;
+                return (
+                  <button
+                    type="button"
+                    key={t.value}
+                    onClick={() => set('managementType', t.value)}
+                    style={{
+                      display: 'flex', gap: 10, alignItems: 'flex-start', textAlign: 'left',
+                      padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                      border: selected ? '2px solid var(--teal)' : '1px solid var(--border)',
+                      background: selected ? '#f0fdfa' : 'var(--surface, #fff)',
+                      fontFamily: 'var(--font-body)',
+                    }}
+                  >
+                    <span style={{ fontSize: 20 }}>{t.icon}</span>
+                    <span>
+                      <span style={{ display: 'block', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>{t.label}</span>
+                      <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{t.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="form-group">
           <label>Airbnb iCal URL <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
           <input className="input" placeholder="https://www.airbnb.com/calendar/ical/..." value={form.icalUrl} onChange={(e) => set('icalUrl', e.target.value)} />
@@ -648,6 +687,7 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, onSetupRooms, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
+  const pm = isPM(l); // property run by a management company: hide cleaning/turnover tooling
 
   // Build "Co-hosted with …" text from accepted co-hosts
   const coHostNames = (coHosts || []).map((ch) => ch.user?.name).filter(Boolean);
@@ -660,6 +700,9 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
           <h3 style={{ marginBottom: 2 }}>{l.name}</h3>
+          {l.managementType && l.managementType !== 'SELF' && (
+            <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 2 }}>{managementLabel(l.managementType)}</p>
+          )}
           {l.address && <p style={{ fontSize: 13 }}>📍 {l.address}</p>}
           {!isOwner && l.host && (
             <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 4 }}>
@@ -681,7 +724,7 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         </div>
       )}
 
-      {canEdit && (l._count?.rooms ?? 1) === 0 && (
+      {canEdit && !pm && (l._count?.rooms ?? 1) === 0 && (
         <div style={{
           marginBottom: 12,
           padding: '6px 10px 6px 12px',
@@ -702,14 +745,16 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
 
       <div className="cluster">
         <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
-          🏠 Manage Listing & Jobs
+          {pm ? '🏠 View Listing' : '🏠 Manage Listing & Jobs'}
         </Link>
 
         {canEdit && (
           <>
-            <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
-              + Add task
-            </button>
+            {!pm && (
+              <button className="btn btn-secondary btn-sm" onClick={() => onAddTask(l)}>
+                + Add task
+              </button>
+            )}
             {l.icalUrl && (
               <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
                 {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
@@ -1070,12 +1115,13 @@ const handleSync = async (id) => {
       {showModal && (
         <ListingModal
           listing={editTarget}
+          canChangeRole={!editTarget || editTarget.hostId === currentUser?.id}
           onClose={() => setShowModal(false)}
           onSaved={(newListing) => {
             setShowModal(false);
             load();
             // Auto-open room wizard after creating a new listing
-            if (newListing && !editTarget) setWizardListing(newListing);
+            if (newListing && !editTarget && !isPM(newListing)) setWizardListing(newListing);
           }}
         />
       )}
