@@ -267,3 +267,31 @@ export function calendarDaysUntil(date) {
   const now = new Date();
   return Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / DAY);
 }
+
+// A draft invoice waiting for the co-host to finish the work, then edit and send.
+export function DraftInvoiceCard({ task, ownerName, busy, onEdit, onSend, onDiscard }) {
+  return (
+    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '2px dashed var(--border)', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, minWidth: 0 }}>
+          <span aria-hidden="true" style={{ fontSize: 22 }}>🧾</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>{task.title}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 2 }}>To {ownerName}</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{money(task.paymentAmount)}</div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Chip icon="✏️">Draft · not sent</Chip>
+        {task.attachments?.length > 0 && <Chip icon="📎">{task.attachments.length}</Chip>}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Created from the approved quote. Send it once the work is done.</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-primary" style={{ flex: 1 }} disabled={busy} onClick={() => onSend(task)}>{busy ? '…' : '📤 Send invoice'}</button>
+        <button className="btn btn-secondary" disabled={busy} onClick={() => onEdit(task)}>Edit</button>
+        <button className="btn btn-secondary" disabled={busy} onClick={() => onDiscard(task)} title="Discard draft">🗑</button>
+      </div>
+    </div>
+  );
+}

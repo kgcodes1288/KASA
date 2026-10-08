@@ -126,6 +126,8 @@ model MaintenanceTask {
   quoteStatus      QuoteStatus?
   decisionNote     String?
   decidedAt        DateTime?
+  isDraft          Boolean    @default(false)
+  sourceQuoteId    String?
   attachments      String[]   @default([])
   lastServicedAt   DateTime?
   nextDueAt        DateTime
