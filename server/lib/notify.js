@@ -11,6 +11,8 @@ const EMAIL_SUBJECT = {
   CONTRACTOR_STARTED:  'Contractor started the job',
   JOB_COMPLETED:       'Cleaning job completed',
   TASK_ASSIGNED:       'A task has been assigned to you',
+  QUOTE_REQUESTED:     'A quote needs your approval',
+  QUOTE_DECIDED:       'Your quote has been answered',
 };
 
 /**

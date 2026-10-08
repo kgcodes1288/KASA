@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
 
-export default function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved, allowMaintenance = false }) {
+export default function QuickTaskModal({ listing, isOwner, currentUser, onClose, onSaved, allowMaintenance = false, allowQuote = false }) {
   const [coHosts, setCoHosts]         = useState([]);
   const [rooms, setRooms]             = useState([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -67,10 +67,12 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
 
   const handleSave = async () => {
     if (!title.trim()) {
-      setError(taskType === 'PAYMENT_REQUEST' ? "What's the payment for? is required" : 'Title is required');
+      setError(taskType === 'PAYMENT_REQUEST' ? "What's the payment for? is required" : isQuote ? "What's the quote for? is required" : 'Title is required');
       return;
     }
-    const due = scheduleType === 'one_time' ? dueDate : nextDueAt;
+    if (isQuote && !(parseFloat(paymentAmount) > 0)) { setError('Enter the quote amount'); return; }
+    if (isQuote && !listing.host?.id) { setError('Could not find the listing owner to send this to'); return; }
+    const due = scheduleType === 'one_time' || isQuote ? dueDate : nextDueAt;
     if (!due) { setError('Due date is required'); return; }
     if (scope === 'room' && !roomId) { setError('Please select a room'); return; }
     setSaving(true); setError('');
@@ -90,14 +92,14 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
         title: title.trim(),
         notes: notes.trim() || null,
         taskType,
-        paymentAmount: taskType === 'PAYMENT_REQUEST' ? paymentAmount.trim() || null : null,
+        paymentAmount: taskType === 'PAYMENT_REQUEST' || isQuote ? paymentAmount.trim() || null : null,
         attachments: uploadedUrls,
         intervalMonths: scheduleType === 'recurring' ? parseInt(intervalMonths) : 0,
-        isRecurring: scheduleType === 'recurring',
+        isRecurring: scheduleType === 'recurring' && !isQuote,
         lastServicedAt: scheduleType === 'recurring' ? lastServicedAt || null : null,
         nextDueAt: due,
-        roomId: scope === 'room' ? roomId : null,
-        assignedUserId: assignedTo || null,
+        roomId: scope === 'room' && !isQuote ? roomId : null,
+        assignedUserId: isQuote ? listing.host.id : assignedTo || null,
       });
       onSaved();
     } catch (err) {
@@ -106,6 +108,8 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
       setSaving(false);
     }
   };
+
+  const isQuote = taskType === 'QUOTE';
 
   const seg = (active) => ({
     flex: 1, padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
@@ -144,6 +148,11 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
                 <button style={seg(taskType === 'PAYMENT_REQUEST')} onClick={() => setTaskType('PAYMENT_REQUEST')}>
                   💰 Request Payment
                 </button>
+                {allowQuote && (
+                  <button style={seg(isQuote)} onClick={() => { setTaskType('QUOTE'); setScheduleType('one_time'); setScope('general'); setRoomId(''); }}>
+                    💬 Send Quote
+                  </button>
+                )}
                 {allowMaintenance && (
                   <button style={seg(taskType === 'MAINTENANCE')} onClick={() => { setTaskType('MAINTENANCE'); setScheduleType('recurring'); }}>
                     🛠️ Maintenance
@@ -154,24 +163,24 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
 
             {/* Title */}
             <div className="form-group">
-              <label>{taskType === 'PAYMENT_REQUEST' ? "What's the payment for?" : 'Title'}</label>
+              <label>{taskType === 'PAYMENT_REQUEST' ? "What's the payment for?" : isQuote ? "What's the quote for?" : 'Title'}</label>
               <input
                 className="input"
-                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Cleaning fee reimbursement' : taskType === 'MAINTENANCE' ? 'e.g. Lawn maintenance, Ring battery' : 'e.g. Fix the broken lock'}
+                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Cleaning fee reimbursement' : taskType === 'MAINTENANCE' ? 'e.g. Lawn maintenance, Ring battery' : isQuote ? 'e.g. Replace patio chairs, repaint living room' : 'e.g. Fix the broken lock'}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 
             {/* Payment amount — only for PAYMENT_REQUEST */}
-            {taskType === 'PAYMENT_REQUEST' && (
+            {(taskType === 'PAYMENT_REQUEST' || isQuote) && (
               <div className="form-group">
-                <label>Payment amount <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+                <label>{isQuote ? 'Quote amount ($)' : 'Payment amount'} {!isQuote && <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span>}</label>
                 <input
                   className="input"
                   type="number"
                   min="0"
-                  placeholder="e.g. 150"
+                  placeholder={isQuote ? 'e.g. 1200' : 'e.g. 150'}
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   onKeyDown={(e) => {
@@ -187,11 +196,11 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
             {/* Notes */}
             <div className="form-group">
               <label>
-                {taskType === 'PAYMENT_REQUEST' ? 'Any additional details' : 'Notes'}
+                {taskType === 'PAYMENT_REQUEST' ? 'Any additional details' : isQuote ? 'Vendor & scope of work' : 'Notes'}
                 {' '}<span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span>
               </label>
               <textarea className="input" rows={2}
-                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Invoice attached, bank transfer preferred…' : 'Any extra details…'}
+                placeholder={taskType === 'PAYMENT_REQUEST' ? 'e.g. Invoice attached, bank transfer preferred…' : isQuote ? 'e.g. Acme Furniture — 2 chairs, delivery included, valid 14 days' : 'Any extra details…'}
                 value={notes} onChange={(e) => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
             </div>
 
@@ -230,7 +239,12 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
             </div>
 
             {/* Assigned to */}
-            {assigneeOptions.length > 0 && (
+            {isQuote && (
+              <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '0 0 14px' }}>
+                📨 Sent to <strong>{listing.host?.name || 'the owner'}</strong> for approval.
+              </p>
+            )}
+            {!isQuote && assigneeOptions.length > 0 && (
               <div className="form-group">
                 <label>Assigned to</label>
                 <select className="input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
@@ -243,6 +257,7 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
             )}
 
             {/* Scope */}
+            {!isQuote && (
             <div className="form-group">
               <label>Applies to</label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -260,8 +275,10 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
                 </select>
               )}
             </div>
+            )}
 
             {/* Schedule */}
+            {!isQuote && (
             <div className="form-group">
               <label>Schedule</label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -273,15 +290,16 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
                 </button>
               </div>
             </div>
+            )}
 
-            {scheduleType === 'one_time' && (
+            {(scheduleType === 'one_time' || isQuote) && (
               <div className="form-group">
-                <label>Due date</label>
+                <label>{isQuote ? 'Reply needed by' : 'Due date'}</label>
                 <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               </div>
             )}
 
-            {scheduleType === 'recurring' && (
+            {scheduleType === 'recurring' && !isQuote && (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="form-group">
@@ -311,7 +329,7 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving…' : 'Add task'}
+                {saving ? 'Saving…' : isQuote ? 'Send quote' : 'Add task'}
               </button>
             </div>
           </>

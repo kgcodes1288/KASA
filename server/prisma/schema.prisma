@@ -123,6 +123,9 @@ model MaintenanceTask {
   isRecurring      Boolean    @default(true)
   taskType         TaskType   @default(MAINTENANCE)
   paymentAmount    String?
+  quoteStatus      QuoteStatus?
+  decisionNote     String?
+  decidedAt        DateTime?
   attachments      String[]   @default([])
   lastServicedAt   DateTime?
   nextDueAt        DateTime
@@ -152,6 +155,13 @@ enum TaskType {
   MAINTENANCE
   ACTION
   PAYMENT_REQUEST
+  QUOTE
+}
+
+enum QuoteStatus {
+  PENDING
+  APPROVED
+  DECLINED
 }
 
 // ── New: contractor token for maintenance tasks ──────────────────────────────
@@ -252,6 +262,8 @@ enum NotifType {
   CONTRACTOR_STARTED
   JOB_COMPLETED
   TASK_ASSIGNED
+  QUOTE_REQUESTED
+  QUOTE_DECIDED
 }
 
 model Booking {

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { isDelegated } from '../managementTypes';
 import HostOverview from '../components/HostOverview';
+import CoHostOverview from '../components/CoHostOverview';
 
 /* ── Room / Appliance / Space modal ── */
 function RoomModal({ listingId, onClose, onSaved, room }) {
@@ -576,6 +577,7 @@ export default function ListingDetail() {
   const [togglingItem, setTogglingItem]   = useState(null);
   const [searchParams] = useSearchParams();
   const [tab, setTab]                     = useState(searchParams.get('tab') === 'jobs' ? 'jobs' : 'spaces');
+  const tabInitialised = useRef(false);
 
   const [coHosts, setCoHosts]                     = useState([]);
   const [assignMaintenanceModal, setAssignMaintenanceModal] = useState(null);
@@ -598,6 +600,11 @@ export default function ListingDetail() {
         api.get(`/listings/${id}/cohosts`),
       ]);
       setListing(lRes.data);
+      // Co-hosts land on their dashboard the first time the page loads (unless a tab was requested)
+      if (!tabInitialised.current) {
+        tabInitialised.current = true;
+        if (!searchParams.get('tab') && lRes.data.hostId !== currentUser?.id) setTab('overview');
+      }
       setAllRooms(rRes.data);
       setJobs(jRes.data.filter((j) => j.listing?.id === id || j.listing === id));
       setContractors(cRes.data);
@@ -726,6 +733,7 @@ export default function ListingDetail() {
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
+  const isCoHostView = listing.hostId !== currentUser?.id;
   const pm = isDelegated(listing) && listing.hostId === currentUser?.id; // owner who delegated to a co-host: overview instead of room/cleaning/job tooling (the co-host keeps those)
 
   return (
@@ -760,6 +768,7 @@ export default function ListingDetail() {
       {!pm && (
       <div className="cluster" style={{ marginBottom: 24 }}>
         {[
+          ...(isCoHostView ? [{ key: 'overview', label: '📊 Overview' }] : []),
           { key: 'spaces', label: `🏠 Spaces & Appliances (${allRooms.length})` },
           { key: 'jobs',   label: `📋 Jobs (${new Set(jobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : 'unknown')).size + maintRooms.flatMap((r) => r.maintenanceTasks || []).length})` },
         ].map(({ key, label }) => (
@@ -769,6 +778,11 @@ export default function ListingDetail() {
           </button>
         ))}
       </div>
+      )}
+
+      {!pm && tab === 'overview' && isCoHostView && (
+        <CoHostOverview listing={listing} currentUser={currentUser} jobs={jobs} tokenStatuses={tokenStatuses}
+          canWrite={canManageTasks} onOpenJobs={() => setTab('jobs')} />
       )}
 
       {/* ── Spaces & Appliances tab ── */}

@@ -11,6 +11,8 @@ const TYPE_ICON = {
   CONTRACTOR_STARTED: '🧹',
   JOB_COMPLETED:      '🏁',
   TASK_ASSIGNED:      '📋',
+  QUOTE_REQUESTED:    '💬',
+  QUOTE_DECIDED:      '🧾',
 };
 
 function timeAgo(dateStr) {

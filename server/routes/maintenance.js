@@ -94,7 +94,18 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     if (!title || !nextDueAt)
       return res.status(400).json({ message: 'title and nextDueAt are required' });
 
-    const recurring = isRecurring !== false;
+    const isQuote = taskType === 'QUOTE';
+    if (isQuote) {
+      const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
+      if (!paymentAmount || !String(paymentAmount).trim())
+        return res.status(400).json({ message: 'A quote needs an amount' });
+      if (assignedUserId !== listing.hostId)
+        return res.status(400).json({ message: 'Quotes are sent to the listing owner for approval' });
+      if (req.user.id === listing.hostId)
+        return res.status(400).json({ message: 'Only a co-host can send a quote to the owner' });
+    }
+
+    const recurring = !isQuote && isRecurring !== false;
     if (recurring && !intervalMonths)
       return res.status(400).json({ message: 'intervalMonths is required for recurring tasks' });
 
@@ -106,6 +117,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         isRecurring: recurring,
         taskType: taskType || 'MAINTENANCE',
         paymentAmount: paymentAmount || null,
+        ...(isQuote && { quoteStatus: 'PENDING' }),
         attachments: Array.isArray(attachments) ? attachments : [],
         lastServicedAt: lastServicedAt ? new Date(lastServicedAt) : null,
         nextDueAt: new Date(nextDueAt),
@@ -124,9 +136,11 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     if (assignedUserId && assignedUserId !== req.user.id) {
       await notify(
         assignedUserId,
-        'TASK_ASSIGNED',
-        'Task assigned to you',
-        `You've been assigned "${title}" at ${task.listing.name}`,
+        isQuote ? 'QUOTE_REQUESTED' : 'TASK_ASSIGNED',
+        isQuote ? 'Quote needs your approval' : 'Task assigned to you',
+        isQuote
+          ? `${req.user.name} sent a quote for "${title}" ($${String(paymentAmount).replace(/^\$/, '')}) at ${task.listing.name}`
+          : `You've been assigned "${title}" at ${task.listing.name}`,
         req.params.id
       );
     }
@@ -148,6 +162,8 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
 
     const { canWrite } = await getAccess(task.listingId, req.user.id);
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
+    if (task.taskType === 'QUOTE')
+      return res.status(400).json({ message: 'Quotes are approved or declined, not completed' });
 
     const now = new Date();
     const updateData = {
@@ -163,6 +179,50 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
       data: updateData,
       include: { assignedUser: { select: { id: true, name: true } } },
     });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/maintenance/:taskId/decision — the listing owner approves or declines a quote
+taskRouter.post('/:taskId/decision', authenticate, async (req, res) => {
+  try {
+    const task = await prisma.maintenanceTask.findUnique({
+      where: { id: req.params.taskId },
+      include: { listing: true },
+    });
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+    if (task.taskType !== 'QUOTE') return res.status(400).json({ message: 'Not a quote' });
+    if (task.listing.hostId !== req.user.id)
+      return res.status(403).json({ message: 'Only the listing owner can approve or decline a quote' });
+    if (task.quoteStatus !== 'PENDING')
+      return res.status(409).json({ message: `This quote was already ${task.quoteStatus.toLowerCase()}` });
+
+    const { decision, note } = req.body;
+    if (!['APPROVED', 'DECLINED'].includes(decision))
+      return res.status(400).json({ message: 'decision must be APPROVED or DECLINED' });
+
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id },
+      data: {
+        quoteStatus: decision,
+        status: 'COMPLETED',
+        decisionNote: note?.trim() || null,
+        decidedAt: new Date(),
+      },
+      include: { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } },
+    });
+
+    if (task.assignedByUserId && task.assignedByUserId !== req.user.id) {
+      await notify(
+        task.assignedByUserId,
+        'QUOTE_DECIDED',
+        `Quote ${decision.toLowerCase()}`,
+        `${req.user.name} ${decision.toLowerCase()} "${task.title}" at ${task.listing.name}${note?.trim() ? `: "${note.trim()}"` : ''}`,
+        task.listingId
+      );
+    }
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: err.message });
