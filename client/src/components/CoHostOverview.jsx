@@ -3,8 +3,9 @@ import api from '../api';
 import QuickTaskModal from './QuickTaskModal';
 import {
   fetchListingTasks, calendarDaysUntil, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal,
-  Chip, StatTile, SectionTitle, AttentionCard, Column, QuoteCard,
+  Chip, StatTile, SectionTitle, AttentionCard, Column, QuoteCard, DraftInvoiceCard,
 } from './overviewParts';
+import DraftInvoiceModal from './DraftInvoiceModal';
 
 // Overview for a co-host running a listing for its owner: upcoming turnovers,
 // what needs a cleaner, maintenance due, quotes awaiting the owner, and tasks both ways.
@@ -73,6 +74,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
   const [tasks, setTasks] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [editDraft, setEditDraft] = useState(null);
 
   const load = () => fetchListingTasks(listing.id).then(setTasks).catch(() => setTasks([]));
   useEffect(() => { load(); }, [listing.id]);
@@ -89,6 +91,32 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     }
   };
 
+  const handleSendDraft = async (task) => {
+    if (!window.confirm(`Send this ${money(task.paymentAmount)} invoice to the owner? Only do this once the work is done.`)) return;
+    setBusyId(task.id);
+    try {
+      await api.post(`/maintenance/${task.id}/send`);
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not send the invoice');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDiscardDraft = async (task) => {
+    if (!window.confirm('Discard this draft invoice?')) return;
+    setBusyId(task.id);
+    try {
+      await api.delete(`/maintenance/${task.id}`);
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not discard the draft');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (!tasks) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>;
 
   const owner = listing.host?.name || 'the owner';
@@ -98,7 +126,8 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
   const soonTurnovers = turnovers.filter((g) => g.days <= TURNOVER_WINDOW_DAYS);
   const needCleaner = soonTurnovers.filter((g) => !isAssigned(g));
 
-  const maintenance = tasks.filter((t) => t.taskType === 'MAINTENANCE' && isOpen(t)).sort(byDue);
+  const drafts = tasks.filter((t) => t.isDraft);
+  const maintenance = tasks.filter((t) => !t.isDraft && t.taskType === 'MAINTENANCE' && isOpen(t)).sort(byDue);
   const quotes = tasks.filter((t) => t.taskType === 'QUOTE');
   const pendingQuotes = quotes.filter((t) => t.quoteStatus === 'PENDING').sort(byDue);
   const decidedQuotes = quotes
@@ -106,7 +135,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     .sort((a, b) => new Date(b.decidedAt) - new Date(a.decidedAt))
     .slice(0, 4);
 
-  const requests = tasks.filter((t) => t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
+  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
   const onMyPlate = requests.filter((t) => !t.assignedUser || t.assignedUser.id === currentUser.id);
   const withOwner = requests.filter((t) => t.assignedUser && t.assignedUser.id !== currentUser.id);
 
@@ -153,6 +182,18 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         </>
       )}
 
+      {drafts.length > 0 && (
+        <>
+          <SectionTitle count={drafts.length}>Draft invoices</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {drafts.map((t) => (
+              <DraftInvoiceCard key={t.id} task={t} ownerName={owner} busy={busyId === t.id}
+                onEdit={setEditDraft} onSend={handleSendDraft} onDiscard={handleDiscardDraft} />
+            ))}
+          </div>
+        </>
+      )}
+
       <SectionTitle count={maintenance.length}>Maintenance due</SectionTitle>
       {maintenance.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 24 }}>
@@ -170,6 +211,10 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         <Column title="On your plate" icon="📝" tasks={onMyPlate} mine empty="Nothing waiting on you 🎉" {...common} busyId={busyId} />
         <Column title={`With ${owner}`} icon="🤝" tasks={withOwner} mine={false} empty="Nothing waiting on the owner" {...common} busyId={busyId} />
       </div>
+
+      {editDraft && (
+        <DraftInvoiceModal task={editDraft} onClose={() => setEditDraft(null)} onSaved={() => { setEditDraft(null); load(); }} />
+      )}
 
       {showModal && (
         <QuickTaskModal

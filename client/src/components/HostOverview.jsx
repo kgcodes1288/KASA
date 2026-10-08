@@ -43,8 +43,8 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
   if (!tasks) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="spinner" /></div>;
 
   const byDue = (a, b) => new Date(a.nextDueAt) - new Date(b.nextDueAt);
-  const maintenance = tasks.filter((t) => t.taskType === 'MAINTENANCE' && isOpen(t)).sort(byDue);
-  const requests = tasks.filter((t) => t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
+  const maintenance = tasks.filter((t) => !t.isDraft && t.taskType === 'MAINTENANCE' && isOpen(t)).sort(byDue);
+  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
   const quotes = tasks.filter((t) => t.taskType === 'QUOTE');
   const pendingQuotes = quotes.filter((t) => t.quoteStatus === 'PENDING').sort(byDue);
   const decidedQuotes = quotes

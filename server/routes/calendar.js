@@ -58,7 +58,7 @@ router.get('/', auth, async (req, res) => {
         orderBy: { name: 'asc' },
       }),
       prisma.maintenanceTask.findMany({
-        where: { listingId: { in: listingIds }, assignedUserId: req.user.id },
+        where: { listingId: { in: listingIds }, assignedUserId: req.user.id, isDraft: false },
         select: {
           id: true, title: true, nextDueAt: true,
           status: true, taskType: true, listingId: true,

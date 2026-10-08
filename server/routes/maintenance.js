@@ -42,6 +42,9 @@ listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
     const { found } = await getAccess(req.params.id, req.user.id);
     if (!found) return res.status(404).json({ message: 'Listing not found' });
 
+    // Drafts are only visible to the person who created them
+    const visible = { OR: [{ isDraft: false }, { assignedByUserId: req.user.id }] };
+
     const taskInclude = {
       assignedUser: { select: { id: true, name: true } },
       assignedBy: { select: { id: true, name: true } },
@@ -54,6 +57,7 @@ listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
         include: {
           checklistItems: { orderBy: { order: 'asc' } },
           maintenanceTasks: {
+            where: visible,
             include: taskInclude,
             orderBy: { nextDueAt: 'asc' },
           },
@@ -61,7 +65,7 @@ listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
         orderBy: { createdAt: 'asc' },
       }),
       prisma.maintenanceTask.findMany({
-        where: { listingId: req.params.id, roomId: null },
+        where: { listingId: req.params.id, roomId: null, ...visible },
         include: taskInclude,
         orderBy: { nextDueAt: 'asc' },
       }),
@@ -164,6 +168,8 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
     if (task.taskType === 'QUOTE')
       return res.status(400).json({ message: 'Quotes are approved or declined, not completed' });
+    if (task.isDraft)
+      return res.status(400).json({ message: 'Send this draft invoice first' });
 
     const now = new Date();
     const updateData = {
@@ -179,6 +185,69 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
       data: updateData,
       include: { assignedUser: { select: { id: true, name: true } } },
     });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Draft invoices belong to the co-host who received the quote approval
+async function loadOwnDraft(req, res) {
+  const task = await prisma.maintenanceTask.findUnique({
+    where: { id: req.params.taskId },
+    include: { listing: true },
+  });
+  if (!task || !task.isDraft || task.assignedByUserId !== req.user.id) {
+    res.status(404).json({ message: 'Draft not found' });
+    return null;
+  }
+  return task;
+}
+
+// PUT /api/maintenance/:taskId/draft — edit a draft invoice
+taskRouter.put('/:taskId/draft', authenticate, async (req, res) => {
+  try {
+    const task = await loadOwnDraft(req, res);
+    if (!task) return;
+    const { title, notes, paymentAmount, nextDueAt, attachments } = req.body;
+    if (title !== undefined && !title.trim()) return res.status(400).json({ message: 'Title is required' });
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id },
+      data: {
+        ...(title !== undefined && { title: title.trim() }),
+        ...(notes !== undefined && { notes: notes?.trim() || null }),
+        ...(paymentAmount !== undefined && { paymentAmount: String(paymentAmount).trim() || null }),
+        ...(nextDueAt && { nextDueAt: new Date(nextDueAt) }),
+        ...(Array.isArray(attachments) && { attachments }),
+      },
+      include: { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } },
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/maintenance/:taskId/send — send a draft invoice to the owner
+taskRouter.post('/:taskId/send', authenticate, async (req, res) => {
+  try {
+    const task = await loadOwnDraft(req, res);
+    if (!task) return;
+    if (!(parseFloat(String(task.paymentAmount ?? '').replace(/[^0-9.]/g, '')) > 0))
+      return res.status(400).json({ message: 'Add the invoice amount before sending' });
+
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id },
+      data: { isDraft: false, nextDueAt: task.nextDueAt < new Date() ? new Date(Date.now() + 14 * 86400000) : task.nextDueAt },
+      include: { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } },
+    });
+    await notify(
+      task.listing.hostId,
+      'TASK_ASSIGNED',
+      'Invoice received',
+      `${req.user.name} sent an invoice for "${task.title.replace(/^Invoice: /, '')}" ($${String(task.paymentAmount).replace(/^\$/, '')}) at ${task.listing.name}`,
+      task.listingId
+    );
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -203,23 +272,47 @@ taskRouter.post('/:taskId/decision', authenticate, async (req, res) => {
     if (!['APPROVED', 'DECLINED'].includes(decision))
       return res.status(400).json({ message: 'decision must be APPROVED or DECLINED' });
 
-    const updated = await prisma.maintenanceTask.update({
-      where: { id: task.id },
-      data: {
-        quoteStatus: decision,
-        status: 'COMPLETED',
-        decisionNote: note?.trim() || null,
-        decidedAt: new Date(),
-      },
-      include: { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } },
-    });
+    // Approving a quote drafts an invoice for the co-host to edit and send once the work is done
+    const draftInvoice = decision === 'APPROVED' && task.assignedByUserId
+      ? [prisma.maintenanceTask.create({
+          data: {
+            title: `Invoice: ${task.title}`,
+            notes: `Quote approved ${new Date().toLocaleDateString('en-US')}.${task.notes ? ` ${task.notes}` : ''}`,
+            taskType: 'PAYMENT_REQUEST',
+            paymentAmount: task.paymentAmount,
+            isRecurring: false,
+            intervalMonths: 0,
+            isDraft: true,
+            sourceQuoteId: task.id,
+            nextDueAt: new Date(Date.now() + 14 * 86400000),
+            listingId: task.listingId,
+            roomId: task.roomId,
+            assignedUserId: task.listing.hostId,
+            assignedByUserId: task.assignedByUserId,
+          },
+        })]
+      : [];
+
+    const [updated] = await prisma.$transaction([
+      prisma.maintenanceTask.update({
+        where: { id: task.id },
+        data: {
+          quoteStatus: decision,
+          status: 'COMPLETED',
+          decisionNote: note?.trim() || null,
+          decidedAt: new Date(),
+        },
+        include: { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } },
+      }),
+      ...draftInvoice,
+    ]);
 
     if (task.assignedByUserId && task.assignedByUserId !== req.user.id) {
       await notify(
         task.assignedByUserId,
         'QUOTE_DECIDED',
         `Quote ${decision.toLowerCase()}`,
-        `${req.user.name} ${decision.toLowerCase()} "${task.title}" at ${task.listing.name}${note?.trim() ? `: "${note.trim()}"` : ''}`,
+        `${req.user.name} ${decision.toLowerCase()} "${task.title}" at ${task.listing.name}${note?.trim() ? `: "${note.trim()}"` : ''}${decision === 'APPROVED' ? '. A draft invoice is waiting on your dashboard.' : ''}`,
         task.listingId
       );
     }
