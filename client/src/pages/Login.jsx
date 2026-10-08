@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { consumePostLoginRedirect } from '../postLoginRedirect';
 
 const _apiRoot = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
 const API_BASE = _apiRoot ? `${_apiRoot}/api` : '/api';
@@ -24,8 +25,11 @@ export default function Login() {
     setError(''); setLoading(true);
     try {
       const user = await login(form.email, form.password);
+      const remembered = consumePostLoginRedirect();
       if (redirect) {
         navigate(redirect);
+      } else if (remembered) {
+        navigate(remembered);
       } else {
         navigate(user.role === 'host' ? '/host' : '/cleaner');
       }
