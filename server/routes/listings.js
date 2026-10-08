@@ -73,6 +73,7 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const listing = await prisma.listing.findUnique({
       where: { id: req.params.id },
+      include: { host: { select: { id: true, name: true } } },
     });
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
     res.json(listing);
