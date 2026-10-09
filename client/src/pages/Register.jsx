@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AuthLanding from '../components/AuthLanding';
 
 const _apiRoot = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
 const API_BASE = _apiRoot ? `${_apiRoot}/api` : '/api';
@@ -32,11 +33,11 @@ export default function Register() {
   };
 
   return (
-    <div className="auth-container">
+    <AuthLanding mode="register">
       <div className="auth-card">
         <div className="auth-logo">
-          <h1>🧹 CleanStay</h1>
-          <p style={{ marginTop: 6 }}>Create your account</p>
+          <h1>Create your account</h1>
+          <p style={{ marginTop: 6 }}>Get your CleanStay portal set up in minutes</p>
         </div>
         {error && <div className="alert alert-error" style={{ marginBottom: 16 }}>{error}</div>}
 
@@ -96,7 +97,7 @@ export default function Register() {
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
       </div>
-    </div>
+    </AuthLanding>
   );
 }
 
