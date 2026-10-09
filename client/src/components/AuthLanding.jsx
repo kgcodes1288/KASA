@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './AuthLanding.css';
 
@@ -53,8 +53,27 @@ const STEPS = [
   { n: 3, title: 'Let CleanStay keep everyone in sync', text: 'Jobs, reminders, quotes and invoices flow to the right person, automatically.' },
 ];
 
+const AI_POINTS = [
+  'Ask what needs attention across all your properties',
+  'Add tasks and vendors, assign cleaners, send job links',
+  'Send, approve or decline quotes, and send invoices',
+  'It always asks you to confirm anything involving money, messages or deleting',
+  'You choose the access: view only, or view and make changes. Disconnect any time',
+];
+
 export default function AuthLanding({ mode = 'login', children }) {
   const [playing, setPlaying] = useState(false);
+  const [aiSeen, setAiSeen] = useState(false);
+  const aiRef = useRef(null);
+
+  // start the chat animation when the section scrolls into view
+  useEffect(() => {
+    const el = aiRef.current;
+    if (!el || !('IntersectionObserver' in window)) { setAiSeen(true); return undefined; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setAiSeen(true); io.disconnect(); } }, { threshold: 0.35 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   return (
     <div className="landing">
@@ -62,6 +81,7 @@ export default function AuthLanding({ mode = 'login', children }) {
       <header className="landing-nav">
         <Link to="/login" className="landing-brand">🧹 CleanStay<span>.</span></Link>
         <nav className="landing-links">
+          <a href="#ai">AI assistant</a>
           <a href="#who">Who it's for</a>
           <a href="#features">Features</a>
           <a href="#watch">Watch</a>
@@ -83,6 +103,9 @@ export default function AuthLanding({ mode = 'login', children }) {
               CleanStay enables seamless communication between hosts and their property managers
               or co-hosts, from booking to turnover to invoice.
             </p>
+            <a href="#ai" className="landing-new">
+              <b>NEW</b> Run it all by chatting with your AI assistant: Claude, ChatGPT or Gemini <span aria-hidden="true">→</span>
+            </a>
             <div className="landing-platforms">
               <span>Works with</span>
               <b className="pill pill--rose">Airbnb</b>
@@ -96,6 +119,50 @@ export default function AuthLanding({ mode = 'login', children }) {
             </ul>
           </div>
           <div className="landing-card-wrap">{children}</div>
+        </div>
+      </section>
+
+      {/* ── AI assistant ── */}
+      <section id="ai" className="landing-ai" ref={aiRef}>
+        <div className="landing-ai-glow landing-ai-glow--a" /><div className="landing-ai-glow landing-ai-glow--b" />
+        <div className="landing-ai-inner">
+          <div className="landing-ai-copy">
+            <span className="landing-ai-badge">✨ New</span>
+            <h2>Run your properties by just chatting</h2>
+            <p className="landing-ai-lead">
+              Connect CleanStay to your AI assistant and get things done in plain English, from your phone or your desk.
+              No menus to learn, no screens to hunt through.
+            </p>
+            <div className="landing-ai-assistants">
+              <b>Claude</b><b>ChatGPT</b><b>Gemini</b><span>and any assistant that supports custom connectors</span>
+            </div>
+            <ul className="landing-ai-points">
+              {AI_POINTS.map((t) => <li key={t}><i>✓</i>{t}</li>)}
+            </ul>
+            <p className="landing-ai-foot">Connect in about a minute, from <b>Account → Chat assistants</b> after you sign up.</p>
+          </div>
+
+          <div className={`chat-mock ${aiSeen ? 'chat-mock--in' : ''}`} aria-label="Example conversation">
+            <div className="chat-bar"><span>🧹</span> Your AI assistant <small>connected to CleanStay</small></div>
+            <div className="chat-body">
+              <div className="chat-b chat-u" style={{ '--d': '0.2s' }}>What needs my attention at Lakeview Cabin this week?</div>
+              <div className="chat-b chat-a" style={{ '--d': '1.2s' }}>
+                Here's what needs you at Lakeview Cabin:
+                <ul>
+                  <li style={{ '--d': '1.9s' }}>Pool cleaning is <b>6 days overdue</b></li>
+                  <li style={{ '--d': '2.6s' }}>The AC filter is due in <b>5 days</b></li>
+                  <li style={{ '--d': '3.3s' }}>The <b>Oct 19</b> checkout still needs a cleaner</li>
+                  <li style={{ '--d': '4.0s' }}><b>2 quotes</b> are waiting for you, <b>$1,730</b> in total</li>
+                </ul>
+              </div>
+              <div className="chat-b chat-u" style={{ '--d': '5.2s' }}>Text Maria the cleaning link for the Oct 19 checkout</div>
+              <div className="chat-b chat-a" style={{ '--d': '6.3s' }}>
+                I'm ready to text <b>Maria's Cleaning</b> the job link for Oct 19. Shall I send it?
+                <div className="chat-btns"><span className="chat-btn chat-btn--p">Send it</span><span className="chat-btn">Not yet</span></div>
+              </div>
+            </div>
+            <div className="chat-note">Illustrative example</div>
+          </div>
         </div>
       </section>
 
