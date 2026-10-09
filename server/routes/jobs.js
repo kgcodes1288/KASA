@@ -2,12 +2,7 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const crypto = require('crypto');
-const twilio = require('twilio');
-
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const { sendSms } = require('../lib/sendSms');
 
 const jobInclude = {
   include: {
@@ -209,9 +204,8 @@ router.post('/send-link', auth, async (req, res) => {
 
     console.log(`[JobToken] Contractor link: ${link}`);
 
-    await twilioClient.messages.create({
+    await sendSms({
       to:   resolvedPhone,
-      from: process.env.TWILIO_PHONE,
       body: `Hi! You have a cleaning job at ${listing.name} on ${new Date(checkoutDate).toLocaleDateString()}. Open your task list here: ${link}`,
     });
 
