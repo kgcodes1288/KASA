@@ -56,7 +56,7 @@ export default function Navbar() {
             {user.isAdmin && (
               <NavLink to="/admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
                 style={{ fontSize: 13, color: '#6366f1', fontWeight: 600 }}>
-                ⚙️ Admin
+                ⚙️<span className="nav-admin-label"> Admin</span>
               </NavLink>
             )}
             <span className={`badge badge-${user.role} nav-role`}>{user.role}</span>
