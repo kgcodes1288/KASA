@@ -71,7 +71,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task</button>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(104px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="⚠️" label="Overdue" value={overdue} hint={overdue ? 'Needs action' : 'Nothing late'} accent="var(--red)" />
         <StatTile icon="⏰" label="Due in 30 days" value={dueSoon} hint="Maintenance" accent="var(--amber)" />
         <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} total` : 'To approve'} accent="var(--amber)" />
@@ -82,7 +82,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
       {(pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
         <>
           <SectionTitle count={pendingQuotes.length}>Quotes to approve</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
             {[...pendingQuotes, ...decidedQuotes].map((q) => (
               <QuoteCard key={q.id} task={q} canDecide busy={busyId === q.id} onDecide={handleDecide} />
             ))}
@@ -97,7 +97,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
           <p style={{ marginTop: 6 }}>All clear — no maintenance due in the next {SOON_DAYS} days.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))', gap: 12 }}>
           {maintenance.map((t) => <AttentionCard key={t.id} task={t} busy={busyId === t.id} {...common} />)}
         </div>
       )}
@@ -108,7 +108,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
       )}
 
       <SectionTitle count={requests.length}>Tasks</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 14 }}>
         <Column title="On your plate" icon="📝" tasks={onMyPlate} mine empty="Nothing waiting on you 🎉"
           {...common} busyId={busyId} />
         <Column title="With your co-host" icon="🤝" tasks={withCoHost} mine={false} empty="Nothing handed off yet"

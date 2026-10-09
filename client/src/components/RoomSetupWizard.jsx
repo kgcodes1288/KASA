@@ -420,7 +420,7 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
                 onClick={next}
                 style={{
                   background: 'none', border: 'none',
-                  color: 'var(--ink-ghost)', fontSize: 13,
+                  color: 'var(--ink-ghost)', fontSize: 13, padding: '10px 12px',
                   cursor: 'pointer', fontFamily: 'var(--font-body)',
                 }}
               >
