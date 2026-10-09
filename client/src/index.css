@@ -214,7 +214,7 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
   .navbar-inner { padding: 0 14px; gap: 8px; }
   /* keep the top bar inside the screen on narrow phones: long names get an ellipsis, brand/buttons never shrink */
   .navbar-brand, .navbar-inner .btn, .nav-link { flex-shrink: 0; }
-  .navbar-inner .badge { min-width: 0; }
+  .navbar-inner .badge { flex-shrink: 0; }
   .nav-user-name { display: block; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navbar-brand { font-size: 1.05rem; }
   .nav-link { font-size: 13px; padding: 4px 7px; }
@@ -224,7 +224,14 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 }
 
 /* the role tag is the first thing to go when space is tight */
+/* ...then the name beside the profile icon and the word 'Admin' (icons stay, so nothing gets squashed) */
 @media (max-width: 430px) { .nav-role { display: none; } }
+@media (max-width: 470px) {
+  .nav-user-name, .nav-admin-label { display: none; }
+  .navbar-inner { gap: 6px; }
+  .navbar-inner .btn { padding-left: 10px; padding-right: 10px; }
+  .navbar-inner .nav-link { padding: 4px 4px; }
+}
 
 /* ── Touch-friendly sizing on phones ── */
 @media (max-width: 560px), (pointer: coarse) and (max-height: 500px) {
