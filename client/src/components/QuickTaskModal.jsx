@@ -141,7 +141,7 @@ export default function QuickTaskModal({ listing, isOwner, currentUser, onClose,
             {/* Task type */}
             <div className="form-group">
               <label>Task type</label>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button style={seg(taskType === 'ACTION')} onClick={() => setTaskType('ACTION')}>
                   ✅ Request Action
                 </button>

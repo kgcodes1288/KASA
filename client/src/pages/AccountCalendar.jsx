@@ -155,7 +155,8 @@ export default function AccountCalendar({ refreshKey = 0 }) {
     background: 'var(--bg)',
     color: 'var(--ink)',
     fontSize: 13,
-    minWidth: 220,
+    minWidth: 'min(220px, 100%)',
+    maxWidth: '100%',
     fontFamily: 'var(--font-body)',
   };
 
@@ -170,7 +171,7 @@ export default function AccountCalendar({ refreshKey = 0 }) {
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
         borderRadius: 12,
-        padding: '16px 20px',
+        padding: '14px 14px',
         marginBottom: 24,
         display: 'flex',
         flexWrap: 'wrap',
@@ -180,7 +181,7 @@ export default function AccountCalendar({ refreshKey = 0 }) {
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>
           Filter by:
         </span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button style={seg(filterMode === 'property')} onClick={() => setFilterMode('property')}>
             Property
           </button>
@@ -263,7 +264,7 @@ export default function AccountCalendar({ refreshKey = 0 }) {
         {/* Day headers */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
+          gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg)',
         }}>
@@ -291,7 +292,7 @@ export default function AccountCalendar({ refreshKey = 0 }) {
             Select a {filterMode === 'property' ? 'property' : 'contractor'} above to view calendar events
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
             {cells.map((day, i) => {
               if (!day) {
                 return (

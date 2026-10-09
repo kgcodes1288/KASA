@@ -42,7 +42,7 @@ function AdminDashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(170px, 100%), 1fr))', gap: 14, marginBottom: 32 }}>
         <StatCard label="Total Users"      value={stats.users.total}        sub={`+${stats.users.newThisMonth} this month`} color="#6366f1" />
         <StatCard label="Hosts"            value={stats.users.hosts}        sub={`${stats.users.cleaners} cleaners`} color="#0d9488" />
         <StatCard label="Total Listings"   value={stats.listings.total}     color="#f59e0b" />

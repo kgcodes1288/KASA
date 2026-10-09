@@ -151,7 +151,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task / quote</button>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(104px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(104px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="🧹" label="Turnovers" value={soonTurnovers.length}
           hint={nextTurnover ? `Next ${new Date(nextTurnover.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'Next 14 days'} accent="var(--teal)" />
         <StatTile icon="⚠️" label="Needs cleaner" value={needCleaner.length} hint={needCleaner.length ? 'Assign in Jobs' : 'All covered'} accent="var(--red)" />
@@ -167,7 +167,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
           <p style={{ marginTop: 6 }}>No checkouts in the next {TURNOVER_WINDOW_DAYS} days.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(270px, 100%), 1fr))', gap: 12 }}>
           {soonTurnovers.slice(0, 6).map((g) => <TurnoverCard key={g.key} g={g} onOpen={onOpenJobs} />)}
         </div>
       )}
@@ -176,7 +176,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       {(pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
         <>
           <SectionTitle count={pendingQuotes.length}>Quotes</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
             {[...pendingQuotes, ...decidedQuotes].map((q) => <QuoteCard key={q.id} task={q} canDecide={false} />)}
           </div>
         </>
@@ -185,7 +185,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       {drafts.length > 0 && (
         <>
           <SectionTitle count={drafts.length}>Draft invoices</SectionTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
             {drafts.map((t) => (
               <DraftInvoiceCard key={t.id} task={t} ownerName={owner} busy={busyId === t.id}
                 onEdit={setEditDraft} onSend={handleSendDraft} onDiscard={handleDiscardDraft} />
@@ -201,13 +201,13 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
           <p style={{ marginTop: 6 }}>Nothing due in the next {SOON_DAYS} days.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))', gap: 12 }}>
           {maintenance.map((t) => <AttentionCard key={t.id} task={t} busy={busyId === t.id} {...common} />)}
         </div>
       )}
 
       <SectionTitle count={requests.length}>Tasks</SectionTitle>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 14 }}>
         <Column title="On your plate" icon="📝" tasks={onMyPlate} mine empty="Nothing waiting on you 🎉" {...common} busyId={busyId} />
         <Column title={`With ${owner}`} icon="🤝" tasks={withOwner} mine={false} empty="Nothing waiting on the owner" {...common} busyId={busyId} />
       </div>
