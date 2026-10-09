@@ -16,6 +16,16 @@ export default function JobDetail() {
     api.get(`/jobs/${id}`).then((r) => setJob(r.data)).finally(() => setLoading(false));
   }, [id]);
 
+  const handleMarkDone = async (completed) => {
+    setToggling((t) => ({ ...t, all: true }));
+    try {
+      const { data } = await api.patch(`/jobs/${id}/status`, { completed });
+      setJob(data);
+    } finally {
+      setToggling((t) => ({ ...t, all: false }));
+    }
+  };
+
   const handleToggle = async (itemId, currentVal) => {
     setToggling((t) => ({ ...t, [itemId]: true }));
     try {
@@ -31,7 +41,7 @@ export default function JobDetail() {
 
   const total = job.checklist.length;
   const done = job.checklist.filter((i) => i.completed).length;
-  const pct = total ? Math.round((done / total) * 100) : 0;
+  const pct = total ? Math.round((done / total) * 100) : (job.status === 'completed' ? 100 : 0);
   const backLink = user?.role === 'host' ? `/listings/${job.listing?.id}` : '/cleaner';
 
   return (
@@ -43,7 +53,7 @@ export default function JobDetail() {
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <div>
-            <h2 style={{ marginBottom: 4 }}>{job.room?.name}</h2>
+            <h2 style={{ marginBottom: 4 }}>🧹 Turnover clean</h2>
             <p style={{ fontSize: 14 }}>🏠 {job.listing?.name}</p>
             {job.listing?.address && <p style={{ fontSize: 13 }}>📍 {job.listing.address}</p>}
           </div>
@@ -77,7 +87,7 @@ export default function JobDetail() {
 
         <div style={{ marginBottom: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, color: 'var(--ink-soft)' }}>
-            <span>{done} of {total} tasks completed</span>
+            <span>{total ? `${done} of ${total} steps completed` : (job.status === 'completed' ? 'Done' : 'Not done yet')}</span>
             <span style={{ fontWeight: 600, color: pct === 100 ? 'var(--green)' : 'var(--teal)' }}>{pct}%</span>
           </div>
           <div className="progress-bar" style={{ height: 8 }}>
@@ -89,10 +99,16 @@ export default function JobDetail() {
       {/* Checklist */}
       <div style={{ marginBottom: 12 }}>
         <h3 style={{ marginBottom: 14, fontFamily: 'var(--font-body)', fontWeight: 600 }}>
-          Checklist
+          Reset checklist
         </h3>
         {total === 0 ? (
-          <div className="empty-state"><p>No checklist items for this room.</p></div>
+          <div className="empty-state">
+            <p>No reset steps for this property — just clean it and mark the job done.</p>
+            <button className={`btn ${job.status === 'completed' ? 'btn-secondary' : 'btn-primary'}`} style={{ marginTop: 12 }}
+              disabled={toggling.all} onClick={() => handleMarkDone(job.status !== 'completed')}>
+              {job.status === 'completed' ? 'Mark as not done' : '✓ Mark job done'}
+            </button>
+          </div>
         ) : (
           <div className="stack">
             {job.checklist.map((item) => (
@@ -107,6 +123,7 @@ export default function JobDetail() {
                   : <input type="checkbox" checked={item.completed} readOnly />
                 }
                 <span className="item-text">{item.text}</span>
+                {item.tag && <span style={{ fontSize: 11, color: 'var(--ink-soft)', background: 'var(--teal-pale)', borderRadius: 99, padding: '2px 8px', flexShrink: 0 }}>{item.tag}</span>}
                 {item.completed && item.completedAt && (
                   <span style={{ fontSize: 11, color: 'var(--ink-ghost)', flexShrink: 0 }}>
                     {new Date(item.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -120,7 +137,7 @@ export default function JobDetail() {
 
       {pct === 100 && (
         <div className="alert alert-success" style={{ textAlign: 'center', marginTop: 20, fontSize: 15 }}>
-          🎉 All done! This room is clean and ready.
+          🎉 All done! The property is reset and ready.
         </div>
       )}
     </div>

@@ -219,7 +219,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
   const rows = jobs.map((j) => `
     <tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#111827;">📅 ${fmt(j.checkoutDate)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#6b7280;">${j.roomCount} room${j.roomCount !== 1 ? 's' : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;font-size:14px;color:#6b7280;">Turnover clean</td>
     </tr>`).join('');
 
   const html = `<!DOCTYPE html>
@@ -281,7 +281,7 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
   const actionUrl = `${APP_URL}/listings/${listingId}?tab=jobs`;
   const fmt = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
-  const jobList = jobs.map((j) => `<li style="margin-bottom:6px;font-size:14px;color:#111827;">📅 ${fmt(j.checkoutDate)} — ${j.roomCount} room${j.roomCount !== 1 ? 's' : ''}</li>`).join('');
+  const jobList = jobs.map((j) => `<li style="margin-bottom:6px;font-size:14px;color:#111827;">📅 ${fmt(j.checkoutDate)} — turnover clean</li>`).join('');
 
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>

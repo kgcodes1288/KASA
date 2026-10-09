@@ -18,10 +18,9 @@ router.get('/listing/:listingId', auth, async (req, res) => {
   try {
     const rooms = await prisma.room.findMany({
       where: { listingId: req.params.listingId },
-      include: { checklistItems: { orderBy: { order: 'asc' } } },
       orderBy: { name: 'asc' },
     });
-    res.json(rooms.map((r) => ({ ...r, checklist: r.checklistItems })));
+    res.json(rooms);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -61,7 +60,7 @@ router.post('/listing/:listingId/batch', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const { listing: listingId, name, entityType, checklist } = req.body;
+    const { listing: listingId, name, entityType } = req.body;
     const ok = await hasListingAccess(listingId, req.user.id);
     if (!ok) return res.status(403).json({ message: 'Not your listing' });
 
@@ -71,13 +70,9 @@ router.post('/', auth, async (req, res) => {
         name,
         entityType: validTypes.includes(entityType) ? entityType : 'ROOM',
         listingId,
-        checklistItems: {
-          create: (checklist || []).map((text, i) => ({ text, order: i })),
-        },
       },
-      include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
-    res.status(201).json({ ...room, checklist: room.checklistItems });
+    res.status(201).json(room);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -93,52 +88,20 @@ router.put('/:id', auth, async (req, res) => {
     const ok = await hasListingAccess(room.listingId, req.user.id);
     if (!ok) return res.status(403).json({ message: 'Not your listing' });
 
-    const { name, entityType, checklist } = req.body;
+    const { name, entityType } = req.body;
     const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
-
-    // Snapshot old checklist texts before wiping them
-    const oldItems = await prisma.checklistTemplate.findMany({ where: { roomId: req.params.id } });
-    const oldTexts = new Set(oldItems.map((i) => i.text.trim().toLowerCase()));
-
-    await prisma.checklistTemplate.deleteMany({ where: { roomId: req.params.id } });
     const updated = await prisma.room.update({
       where: { id: req.params.id },
       data: {
         name: name || room.name,
         entityType: validTypes.includes(entityType) ? entityType : room.entityType,
-        checklistItems: {
-          create: (checklist || []).map((item, i) => ({
-            text: typeof item === 'string' ? item : item.text,
-            order: i,
-          })),
-        },
       },
-      include: { checklistItems: { orderBy: { order: 'asc' } } },
     });
-
-    // Propagate newly added checklist items into pending/in_progress jobs for this room
-    const newTexts = (checklist || [])
-      .map((item) => (typeof item === 'string' ? item : item.text).trim())
-      .filter((t) => !oldTexts.has(t.toLowerCase()));
-
-    if (newTexts.length > 0) {
-      const activeJobs = await prisma.job.findMany({
-        where: { roomId: req.params.id, status: { in: ['pending', 'in_progress'] } },
-        include: { checklistItems: true },
-      });
-
-      for (const job of activeJobs) {
-        const existingJobTexts = new Set(job.checklistItems.map((c) => c.text.trim().toLowerCase()));
-        const toAdd = newTexts.filter((t) => !existingJobTexts.has(t.toLowerCase()));
-        if (toAdd.length > 0) {
-          await prisma.jobChecklist.createMany({
-            data: toAdd.map((text) => ({ jobId: job.id, text, completed: false })),
-          });
-        }
-      }
+    // keep the label on existing turnover steps in step with a rename
+    if (name && name !== room.name) {
+      await prisma.jobChecklist.updateMany({ where: { tag: room.name, job: { listingId: room.listingId } }, data: { tag: name } });
     }
-
-    res.json({ ...updated, checklist: updated.checklistItems });
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

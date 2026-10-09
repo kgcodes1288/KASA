@@ -29,7 +29,7 @@ const PERSONAS = [
     tone: 'amber', icon: '🧹', who: 'Cleaners & vendors',
     line: 'A simple link. No app, no account.',
     points: [
-      'Get a text with the job and a room-by-room checklist',
+      'Get a text with the job and your reset checklist',
       'Accept the job, tick off tasks, and you\'re done',
       'Hosts and co-hosts see progress live',
     ],
@@ -38,7 +38,7 @@ const PERSONAS = [
 
 const FEATURES = [
   { icon: '📅', title: 'Calendar sync', text: 'Paste your Airbnb, Vrbo or any iCal link. Bookings and checkouts appear automatically.' },
-  { icon: '✨', title: 'Automatic cleaning jobs', text: 'Every checkout creates a room-by-room job, using the checklists you write.' },
+  { icon: '✨', title: 'Automatic cleaning jobs', text: 'Every checkout creates one turnover job, with your reset list as its checklist.' },
   { icon: '📲', title: 'One-tap job links', text: 'Text cleaners and vendors a private link to their task list. Nothing to install.' },
   { icon: '🛠️', title: 'Maintenance reminders', text: 'Recurring reminders for filters, pools, lawns and more, so nothing is ever overdue.' },
   { icon: '💬', title: 'Quotes & invoices', text: 'Co-hosts send quotes, owners approve, and a draft invoice is ready when the work is done.' },
@@ -49,7 +49,7 @@ const FEATURES = [
 
 const STEPS = [
   { n: 1, title: 'Connect your calendar', text: 'Paste the iCal link from Airbnb, Vrbo or any other booking platform.' },
-  { n: 2, title: 'Set up your rooms and team', text: 'Add rooms and checklists, then invite co-hosts and add your vendors.' },
+  { n: 2, title: 'Set up your rooms and team', text: 'Add your rooms, appliances and reset list, then invite co-hosts and add your vendors.' },
   { n: 3, title: 'Let CleanStay keep everyone in sync', text: 'Jobs, reminders, quotes and invoices flow to the right person, automatically.' },
 ];
 

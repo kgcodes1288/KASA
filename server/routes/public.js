@@ -2,7 +2,7 @@ const router = require('express').Router();
 const prisma = require('../lib/prisma');
 const { notify, notifyListingMembers } = require('../lib/notify');
 
-// GET /api/public/job/:token — return all jobs for this checkout grouped by room
+// GET /api/public/job/:token — the turnover job for this checkout
 router.get('/job/:token', async (req, res) => {
   try {
     const jobToken = await prisma.jobToken.findUnique({
@@ -25,32 +25,16 @@ router.get('/job/:token', async (req, res) => {
     const checkoutEnd = new Date(jobToken.checkoutDate);
     checkoutEnd.setHours(23, 59, 59, 999);
 
-    const jobs = await prisma.job.findMany({
+    // One turnover job per checkout (legacy per-room jobs are merged at startup)
+    const job = await prisma.job.findFirst({
       where: {
         listingId: jobToken.listingId,
         checkoutDate: { gte: checkoutStart, lte: checkoutEnd },
       },
-      include: {
-        room:           { select: { id: true, name: true } },
-        checklistItems: { orderBy: { id: 'asc' } },
-      },
-      orderBy: { room: { name: 'asc' } },
+      include: { checklistItems: { orderBy: { id: 'asc' } } },
+      orderBy: { createdAt: 'asc' },
     });
-
-    const seen = new Set();
-    const deduped = jobs.filter((j) => {
-      const name = j.room?.name || 'Room';
-      if (seen.has(name)) return false;
-      seen.add(name);
-      return true;
-    });
-
-    const rooms = deduped.map((j) => ({
-      jobId:     j.id,
-      roomName:  j.room?.name || 'Room',
-      status:    j.status,
-      checklist: j.checklistItems,
-    }));
+    if (!job) return res.status(404).json({ message: 'Invalid link' });
 
     res.json({
       listing:        jobToken.listing,
@@ -58,7 +42,7 @@ router.get('/job/:token', async (req, res) => {
       expiresAt:      jobToken.expiresAt,
       tokenStatus:    jobToken.status,
       contractorName: jobToken.contractorName,
-      rooms,
+      job: { jobId: job.id, status: job.status, checklist: job.checklistItems },
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -150,6 +134,38 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
     }
 
     res.json({ success: true, completed, status });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/public/job/:token/complete — mark the whole turnover done / not done
+router.patch('/job/:token/complete', async (req, res) => {
+  try {
+    const jobToken = await prisma.jobToken.findUnique({ where: { token: req.params.token } });
+    if (!jobToken) return res.status(404).json({ message: 'Invalid link' });
+    if (jobToken.status === 'WITHDRAWN') return res.status(410).json({ message: 'This job assignment has been withdrawn' });
+    if (new Date() > new Date(jobToken.expiresAt)) return res.status(410).json({ message: 'This link has expired' });
+
+    const start = new Date(jobToken.checkoutDate); start.setHours(0, 0, 0, 0);
+    const end   = new Date(jobToken.checkoutDate); end.setHours(23, 59, 59, 999);
+    const job = await prisma.job.findFirst({
+      where: { listingId: jobToken.listingId, checkoutDate: { gte: start, lte: end } },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+
+    const done = !!req.body.completed;
+    await prisma.jobChecklist.updateMany({ where: { jobId: job.id }, data: { completed: done, completedAt: done ? new Date() : null } });
+    const status = done ? 'completed' : 'pending';
+    await prisma.job.update({ where: { id: job.id }, data: { status } });
+
+    if (job.status !== status && done) {
+      const dateStr = new Date(jobToken.checkoutDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      await notifyListingMembers(jobToken.listingId, 'JOB_COMPLETED', 'Job completed',
+        `${jobToken.contractorName || 'Contractor'} completed the cleaning job on ${dateStr}`);
+    }
+    res.json({ success: true, status });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

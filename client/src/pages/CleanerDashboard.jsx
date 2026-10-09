@@ -26,12 +26,12 @@ export default function CleanerDashboard() {
     const pct = total ? Math.round((done / total) * 100) : 0;
 
     return (
-      <Link to={`/jobs/${j._id}`} key={j._id} style={{ textDecoration: 'none' }}>
+      <Link to={`/jobs/${j.id}`} key={j.id} style={{ textDecoration: 'none' }}>
         <div className="card card-hover">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <div>
               <h3 style={{ marginBottom: 2 }}>{j.listing?.name}</h3>
-              <p style={{ fontSize: 13 }}>🛏 {j.room?.name}</p>
+              <p style={{ fontSize: 13 }}>🧹 Turnover clean</p>
             </div>
             <span className={`badge badge-${j.status}`}>{STATUS_LABEL[j.status]}</span>
           </div>

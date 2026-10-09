@@ -129,10 +129,10 @@ function registerTools(server, ctx) {
       const byDate = {};
       jobs.forEach((j) => {
         const k = dayKey(j.checkoutDate);
-        const g = (byDate[k] ||= { checkout: k, inDays: daysUntil(j.checkoutDate), rooms: 0, roomsDone: 0, cleaners: new Set() });
-        g.rooms += 1; if (j.status === 'completed') g.roomsDone += 1; if (j.cleaner?.name) g.cleaners.add(j.cleaner.name);
+        const g = (byDate[k] ||= { checkout: k, inDays: daysUntil(j.checkoutDate), steps: 0, stepsDone: 0, status: j.status, cleaners: new Set() });
+        g.steps += j.checklist?.length || 0; g.stepsDone += (j.checklist || []).filter((c) => c.completed).length; if (j.cleaner?.name) g.cleaners.add(j.cleaner.name);
       });
-      const turnovers = Object.values(byDate).filter((g) => g.inDays >= 0 && g.inDays <= 14 && g.roomsDone < g.rooms).sort((a, b) => a.inDays - b.inDays);
+      const turnovers = Object.values(byDate).filter((g) => g.inDays >= 0 && g.inDays <= 14 && g.status !== 'completed').sort((a, b) => a.inDays - b.inDays);
       for (const g of turnovers) {
         if (g.cleaners.size === 0) {
           try { g.contractor = (await api('GET', `/jobs/token-status/${l.id}/${g.checkout}`))?.status; } catch { /* none */ }
@@ -141,7 +141,7 @@ function registerTools(server, ctx) {
       out.push({
         property: l.name, id: l.id, yourRole: l.role, managementType: l.managementType,
         turnoversNext14Days: turnovers.map((g) => ({
-          checkout: g.checkout, inDays: g.inDays, rooms: `${g.roomsDone}/${g.rooms} done`,
+          checkout: g.checkout, inDays: g.inDays, status: g.status, resetSteps: g.steps ? `${g.stepsDone}/${g.steps} done` : 'no reset list',
           cleaner: g.cleaners.size ? [...g.cleaners].join(', ') : (g.contractor ? `contractor (${g.contractor.toLowerCase()})` : 'NEEDS A CLEANER'),
         })),
         maintenanceDue: open.filter((t) => t.taskType === 'MAINTENANCE').map(shapeTask),
@@ -155,7 +155,7 @@ function registerTools(server, ctx) {
 
   def('list_upcoming_checkouts', {
     title: 'Upcoming checkouts / cleanings',
-    description: 'Upcoming guest checkouts that have cleaning jobs, grouped by date, with room progress and the assigned cleaner.',
+    description: 'Upcoming guest checkouts, one turnover cleaning job each, with its reset-list progress and the assigned cleaner.',
     input: { listingId: z.string().optional(), days: z.number().int().min(1).max(365).optional().describe('Look-ahead window, default 30') },
   }, {}, async ({ listingId: only, days = 30 }) => {
     const jobs = (await api('GET', '/jobs')).filter((j) => !only || (j.listing?.id || j.listing) === only);
@@ -163,12 +163,12 @@ function registerTools(server, ctx) {
     jobs.forEach((j) => {
       const lid = j.listing?.id || j.listing;
       const k = `${lid}|${dayKey(j.checkoutDate)}`;
-      const g = (groups[k] ||= { property: j.listing?.name, listingId: lid, checkout: dayKey(j.checkoutDate), inDays: daysUntil(j.checkoutDate), nextCheckin: j.checkinDate ? dayKey(j.checkinDate) : undefined, rooms: [], cleaners: new Set(), jobIds: [] });
-      g.rooms.push({ room: j.room?.name, status: j.status }); g.jobIds.push(j.id);
+      const g = (groups[k] ||= { property: j.listing?.name, listingId: lid, checkout: dayKey(j.checkoutDate), inDays: daysUntil(j.checkoutDate), nextCheckin: j.checkinDate ? dayKey(j.checkinDate) : undefined, status: j.status, resetSteps: (j.checklist || []).map((c) => ({ step: c.text, room: c.tag || undefined, done: c.completed })), cleaners: new Set(), jobIds: [] });
+      g.jobIds.push(j.id);
       if (j.cleaner?.name) g.cleaners.add(j.cleaner.name);
     });
     return Object.values(groups).filter((g) => g.inDays >= 0 && g.inDays <= days).sort((a, b) => a.inDays - b.inDays)
-      .map((g) => ({ ...g, cleaners: [...g.cleaners], roomsDone: g.rooms.filter((r) => r.status === 'completed').length, roomCount: g.rooms.length }));
+      .map((g) => ({ ...g, cleaners: [...g.cleaners] }));
   });
 
   def('get_calendar', {
@@ -311,9 +311,24 @@ function registerTools(server, ctx) {
 
   def('assign_cleaner', {
     title: 'Assign a cleaner to a job',
-    description: 'Assign a team member (user id from list_team) to a cleaning job. Job ids come from list_upcoming_checkouts (jobIds); assign each room\'s job in a checkout, or all of them.',
+    description: 'Assign a team member (user id from list_team) to a cleaning job. Job ids come from list_upcoming_checkouts (jobIds); each checkout has one turnover job.',
     input: { jobId: z.string(), cleanerId: z.string() },
   }, { write: true }, async ({ jobId, cleanerId }) => api('PATCH', `/jobs/${jobId}/assign`, { cleanerId }));
+
+  def('get_reset_list', {
+    title: 'Get a property\'s turnover reset list',
+    description: 'The steps copied onto every checkout cleaning job for a property (e.g. "Reset thermostat to 72"), each optionally tagged with a room or appliance. Empty means each checkout is a single task with no sub-tasks.',
+    input: { listingId },
+  }, {}, async ({ listingId: lid }) => api('GET', `/listings/${lid}/reset-list`));
+
+  def('set_reset_list', {
+    title: 'Set a property\'s turnover reset list',
+    description: 'Replace the whole reset list. Each step is text plus an optional room = the NAME of one of the property\'s rooms/appliances/spaces (e.g. "Thermostat"); an unknown name is ignored. Steps that are new are also added to upcoming unfinished checkout jobs. Send the complete list, not just additions.',
+    input: { listingId, steps: z.array(z.object({ text: z.string(), room: z.string().optional() })) },
+  }, {
+    write: true,
+    confirm: async ({ listingId: lid, steps }) => `REPLACE the reset list on this property with ${steps.length} step(s): ${steps.map((s) => s.text).join('; ') || '(none)'}.`,
+  }, async ({ listingId: lid, steps }) => api('PUT', `/listings/${lid}/reset-list`, { items: steps.map((x) => ({ text: x.text, roomName: x.room })) }));
 
   def('send_contractor_link', {
     title: 'Text a contractor the job link',
