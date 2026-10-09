@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { consumePostLoginRedirect } from '../postLoginRedirect';
+import AuthLanding from '../components/AuthLanding';
 
 const _apiRoot = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
 const API_BASE = _apiRoot ? `${_apiRoot}/api` : '/api';
@@ -45,11 +46,11 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-container">
+    <AuthLanding mode="login">
       <div className="auth-card">
         <div className="auth-logo">
-          <h1>🧹 CleanStay</h1>
-          <p style={{ marginTop: 6 }}>Airbnb cleaning, organised.</p>
+          <h1>Welcome back</h1>
+          <p style={{ marginTop: 6 }}>Sign in to your CleanStay portal</p>
         </div>
         {justReset && (
           <div className="alert alert-success" style={{ marginBottom: 16 }}>
@@ -112,7 +113,7 @@ export default function Login() {
           Don't have an account? <Link to="/register">Create one</Link>
         </p>
       </div>
-    </div>
+    </AuthLanding>
   );
 }
 
