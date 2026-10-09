@@ -46,7 +46,7 @@ export default function Navbar() {
                 gap: 6,
               }}
             >
-              👤 {user.name}
+              👤 <span className="nav-user-name">{user.name}</span>
               {unreadCount > 0 && (
                 <span key={unreadCount} className="notif-badge">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -59,7 +59,7 @@ export default function Navbar() {
                 ⚙️ Admin
               </NavLink>
             )}
-            <span className={`badge badge-${user.role}`}>{user.role}</span>
+            <span className={`badge badge-${user.role} nav-role`}>{user.role}</span>
             <button className="btn btn-secondary btn-sm" onClick={handleLogout}>
               Sign out
             </button>
