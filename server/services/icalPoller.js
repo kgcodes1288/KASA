@@ -2,6 +2,7 @@ const ical = require('node-ical');
 const cron = require('node-cron');
 const prisma = require('../lib/prisma');
 const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
+const { getResetItems, checklistFromReset } = require('../lib/turnover');
 
 async function syncListing(listing) {
   if (!listing.icalUrl) {
@@ -14,10 +15,7 @@ async function syncListing(listing) {
     const now = new Date();
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rooms = await prisma.room.findMany({
-      where: { listingId: listing.id },
-      include: { checklistItems: { orderBy: { order: 'asc' } } },
-    });
+    const resetItems = await getResetItems(listing.id);
 
     // iCal all-day dates are midnight UTC — normalize to noon UTC so
     // no timezone offset can shift the display date to the previous day
@@ -59,39 +57,33 @@ async function syncListing(listing) {
       });
       bookingsSynced++;
 
-      // Only create cleaning jobs for actual guest bookings (not blocked dates), and only if rooms exist
-      if (isBlocked || rooms.length === 0) continue;
+      // One turnover job per guest checkout (not for blocked dates). Its checklist is the
+      // listing's reset list; with no reset list the job is a single task with no sub-tasks.
+      if (isBlocked) continue;
 
       let createdCount = 0;
-      for (const room of rooms) {
-        const existing = await prisma.job.findFirst({
-          where: { listingId: listing.id, roomId: room.id, checkoutDate },
-        });
-        if (existing) continue;
-
+      const existing = await prisma.job.findFirst({
+        where: { listingId: listing.id, checkoutDate },
+      });
+      if (!existing) {
         await prisma.job.create({
           data: {
             listingId: listing.id,
-            roomId: room.id,
             cleanerId: listing.defaultCleanerId || null,
             checkoutDate,
             checkinDate,
             guestName,
             status: 'pending',
-            checklistItems: {
-              create: room.checklistItems.length > 0
-                ? room.checklistItems.map((item) => ({ text: item.text }))
-                : [{ text: 'Done' }],
-            },
+            checklistItems: { create: checklistFromReset(resetItems) },
           },
         });
         createdCount++;
-        console.log(`[iCal] Created job for room "${room.name}" — checkout ${checkoutDate}`);
+        console.log(`[iCal] Created turnover job — checkout ${checkoutDate}`);
       }
 
       if (createdCount > 0) {
         const key = checkoutDate.toISOString();
-        newJobsByDate[key] = { checkoutDate, roomCount: (newJobsByDate[key]?.roomCount || 0) + createdCount };
+        newJobsByDate[key] = { checkoutDate, roomCount: 1 };
       }
     }
 
@@ -105,10 +97,10 @@ async function syncListing(listing) {
       console.log(`[iCal] Digest sent for ${listing.name} — ${newJobsSummary.length} new checkout date(s)`);
     }
 
-    const totalCreated = Object.values(newJobsByDate).reduce((sum, j) => sum + j.roomCount, 0);
+    const totalCreated = Object.keys(newJobsByDate).length;
     await prisma.listing.update({ where: { id: listing.id }, data: { lastSynced: new Date() } });
     console.log(`[iCal] Sync complete for: ${listing.name} — ${bookingsSynced} booking(s) synced, ${totalCreated} job(s) created`);
-    return { jobsCreated: totalCreated, bookingsSynced, reason: rooms.length === 0 ? 'no_rooms' : 'ok' };
+    return { jobsCreated: totalCreated, bookingsSynced, reason: 'ok' };
   } catch (err) {
     console.error(`[iCal] Error syncing listing ${listing.id}:`, err.message);
     throw err;

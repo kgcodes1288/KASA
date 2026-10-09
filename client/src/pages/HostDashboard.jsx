@@ -612,11 +612,7 @@ const handleSync = async (id) => {
     setSyncVersion((v) => v + 1);
 
     // Surface a helpful message based on what happened
-    if (data.reason === 'no_rooms') {
-      const bCount = data.bookingsSynced ?? 0;
-      const bText = bCount > 0 ? `${bCount} booking${bCount !== 1 ? 's' : ''} synced to calendar` : 'Calendar synced';
-      setSyncMessages((m) => ({ ...m, [id]: `✓ ${bText} — add rooms to this listing to create cleaning jobs.` }));
-    } else if (data.jobsCreated === 0) {
+    if (data.jobsCreated === 0) {
       setSyncMessages((m) => ({ ...m, [id]: '✓ Synced — no new bookings found in your calendar.' }));
     } else {
       setSyncMessages((m) => ({ ...m, [id]: `✓ Synced — ${data.jobsCreated} new cleaning job${data.jobsCreated !== 1 ? 's' : ''} created.` }));

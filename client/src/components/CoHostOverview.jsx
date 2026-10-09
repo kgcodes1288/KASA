@@ -19,9 +19,10 @@ function groupTurnovers(jobs, tokenStatuses) {
     if (seen.has(j.id) || !j.checkoutDate) return;
     seen.add(j.id);
     const key = new Date(j.checkoutDate).toISOString().slice(0, 10);
-    const g = (byDate[key] ||= { key, date: j.checkoutDate, checkin: j.checkinDate, rooms: 0, done: 0, cleaners: new Set() });
-    g.rooms += 1;
-    if (j.status === 'completed') g.done += 1;
+    const g = (byDate[key] ||= { key, date: j.checkoutDate, checkin: j.checkinDate, steps: 0, done: 0, complete: true, cleaners: new Set() });
+    g.steps += j.checklist?.length || 0;
+    g.done += (j.checklist || []).filter((c) => c.completed).length;
+    if (j.status !== 'completed') g.complete = false;
     if (j.cleaner?.name) g.cleaners.add(j.cleaner.name);
   });
   return Object.values(byDate)
@@ -29,7 +30,7 @@ function groupTurnovers(jobs, tokenStatuses) {
       const token = tokenStatuses?.[g.key] || null;
       return { ...g, contractor: token && token.status !== 'WITHDRAWN' ? token : null, days: calendarDaysUntil(g.date) };
     })
-    .filter((g) => g.done < g.rooms && g.days >= -1)
+    .filter((g) => !g.complete && g.days >= -1)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 }
 
@@ -37,7 +38,7 @@ const isAssigned = (g) => g.cleaners.size > 0 || !!g.contractor;
 
 function TurnoverCard({ g, onOpen }) {
   const d = new Date(g.date);
-  const pct = g.rooms ? Math.round((g.done / g.rooms) * 100) : 0;
+  const pct = g.steps ? Math.round((g.done / g.steps) * 100) : 0;
   const when = g.days <= 0 ? 'Today' : g.days === 1 ? 'Tomorrow' : `In ${g.days} days`;
   const urgent = g.days <= 1;
   return (
@@ -52,7 +53,7 @@ function TurnoverCard({ g, onOpen }) {
       <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Checkout · {when}</span>
-          <span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>{g.done}/{g.rooms} rooms</span>
+          <span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>{g.steps ? `${g.done}/${g.steps} steps` : 'Turnover clean'}</span>
         </div>
         <div style={{ height: 6, borderRadius: 999, background: 'var(--border)', overflow: 'hidden' }}>
           <div style={{ width: `${Math.max(pct, 3)}%`, height: '100%', borderRadius: 999, background: 'var(--teal)' }} />

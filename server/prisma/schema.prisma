@@ -60,6 +60,7 @@ model Listing {
   defaultCleaner    User?             @relation("ListingDefaultCleaner", fields: [defaultCleanerId], references: [id], onDelete: SetNull)
   rooms             Room[]
   jobs              Job[]
+  resetItems        ResetItem[]
   bookings          Booking[]         @relation("ListingBookings")
   coHosts           ListingCoHost[]   @relation("CoHostListing")
   maintenanceTasks  MaintenanceTask[]
@@ -114,6 +115,7 @@ model Room {
   listing          Listing             @relation(fields: [listingId], references: [id], onDelete: Cascade)
   checklistItems   ChecklistTemplate[]
   jobs             Job[]
+  resetItems       ResetItem[]
   maintenanceTasks MaintenanceTask[]
 }
 
@@ -200,11 +202,11 @@ model Job {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   listingId      String
-  roomId         String
+  roomId         String?   // legacy per-room jobs only; a turnover job has no room
   cleanerId      String?
 
   listing        Listing        @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  room           Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room           Room?          @relation(fields: [roomId], references: [id], onDelete: Cascade)
   cleaner        User?          @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
   checklistItems JobChecklist[]
 }
@@ -220,9 +222,22 @@ model JobChecklist {
   text        String
   completed   Boolean   @default(false)
   completedAt DateTime?
+  tag         String?   // optional room/appliance name this step relates to
   jobId       String
 
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+// One step in a listing's turnover (reset) list; copied onto each checkout job.
+model ResetItem {
+  id        String   @id @default(cuid())
+  text      String
+  order     Int      @default(0)
+  listingId String
+  roomId    String?  // optional tag: a room / appliance / space
+
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
 }
 
 model JobToken {

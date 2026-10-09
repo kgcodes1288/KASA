@@ -30,7 +30,6 @@ listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
   const rooms = await prisma.room.findMany({
     where: { listingId: req.params.id },
     include: {
-      checklistItems: { orderBy: { order: 'asc' } },
       maintenanceTasks: {
         include: { assignedUser: { select: { id: true, name: true } } },
         orderBy: { nextDueAt: 'asc' },

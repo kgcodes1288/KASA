@@ -85,6 +85,26 @@ router.patch('/:id/checklist/:itemId', auth, async (req, res) => {
   }
 });
 
+// PATCH /api/jobs/:id/status — mark a job done / not done (for jobs with no checklist)
+router.patch('/:id/status', auth, async (req, res) => {
+  try {
+    const existing = await prisma.job.findUnique({ where: { id: req.params.id }, include: { listing: true, checklistItems: true } });
+    if (!existing) return res.status(404).json({ message: 'Job not found' });
+    const allowed = existing.cleanerId === req.user.id || existing.listing.hostId === req.user.id ||
+      !!(await prisma.listingCoHost.findFirst({ where: { listingId: existing.listingId, userId: req.user.id, status: 'ACCEPTED' } }));
+    if (!allowed) return res.status(403).json({ message: 'Not authorised' });
+    const done = !!req.body.completed;
+    // with sub-tasks, "done" ticks every step so the checklist and status always agree
+    if (existing.checklistItems.length) {
+      await prisma.jobChecklist.updateMany({ where: { jobId: existing.id }, data: { completed: done, completedAt: done ? new Date() : null } });
+    }
+    const job = await prisma.job.update({ where: { id: existing.id }, data: { status: done ? 'completed' : 'pending' }, ...jobInclude });
+    res.json(fmt(job));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // PATCH /api/jobs/:id/assign
 router.patch('/:id/assign', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });

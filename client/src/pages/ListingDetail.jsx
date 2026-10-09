@@ -19,9 +19,9 @@ function RoomModal({ listingId, onClose, onSaved, room }) {
     setSaving(true); setError('');
     try {
       if (editing) {
-        await api.put(`/rooms/${room.id}`, { name, entityType, checklist: room.checklist?.map(c => c.text) || [] });
+        await api.put(`/rooms/${room.id}`, { name, entityType });
       } else {
-        await api.post('/rooms', { listing: listingId, name, entityType, checklist: [] });
+        await api.post('/rooms', { listing: listingId, name, entityType });
       }
       onSaved();
     } catch (err) {
@@ -69,54 +69,95 @@ function RoomModal({ listingId, onClose, onSaved, room }) {
   );
 }
 
-/* ── Add Cleaning Task modal ── */
-function AddChecklistItemModal({ room, onClose, onSaved }) {
+/* ── Turnover reset list ── */
+// The steps copied onto every checkout job. Each can be tagged with a room/appliance.
+function ResetListCard({ listingId, spaces, canEdit }) {
+  const [items, setItems]   = useState(null);
   const [text, setText]     = useState('');
-  const [error, setError]   = useState('');
+  const [roomId, setRoomId] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
-  const handleSave = async () => {
-    if (!text.trim()) { setError('Task description is required'); return; }
+  useEffect(() => {
+    api.get(`/listings/${listingId}/reset-list`).then((r) => setItems(r.data)).catch(() => setItems([]));
+  }, [listingId]);
+
+  const save = async (next) => {
     setSaving(true); setError('');
     try {
-      const existing = (room.checklistItems || []).map((c) => c.text);
-      await api.put(`/rooms/${room.id}`, {
-        name: room.name,
-        entityType: room.entityType,
-        checklist: [...existing, text.trim()],
+      const { data } = await api.put(`/listings/${listingId}/reset-list`, {
+        items: next.map((i) => ({ text: i.text, roomId: i.roomId || undefined })),
       });
-      onSaved();
+      setItems(data);
+      return true;
     } catch (err) {
-      setError(err.response?.data?.message || 'Save failed');
+      setError(err.response?.data?.message || 'Could not save');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  const add = async () => {
+    if (!text.trim()) return;
+    if (await save([...items, { text: text.trim(), roomId }])) { setText(''); setRoomId(''); }
+  };
+  const remove = (idx) => save(items.filter((_, i) => i !== idx));
+  const move = (idx, dir) => {
+    const next = [...items]; const j = idx + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[idx], next[j]] = [next[j], next[idx]];
+    save(next);
+  };
+  const retag = (idx, newRoomId) => save(items.map((it, i) => (i === idx ? { ...it, roomId: newRoomId } : it)));
+
+  if (!items) return null;
+
   return (
-    <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 460 }}>
-        <div className="modal-header">
-          <h3>Add cleaning task — {room.name}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+    <div className="card" style={{ marginBottom: 24 }}>
+      <h3 style={{ fontSize: 16, marginBottom: 4 }}>🧹 Turnover reset list</h3>
+      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+        {items.length === 0
+          ? 'Every checkout creates one cleaning job for the whole property. Add steps below if you want a checklist on each job (optional).'
+          : 'These steps are on the checklist of every checkout job. Tag a step with a room or appliance if it helps.'}
+      </p>
+      {error && <div className="alert alert-error" style={{ marginBottom: 10 }}>{error}</div>}
+
+      {items.length > 0 && (
+        <div className="stack" style={{ gap: 6, marginBottom: 12 }}>
+          {items.map((item, idx) => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--bg)', border: '1px solid var(--border)' }}>
+              <span style={{ flex: '1 1 180px', minWidth: 0, fontSize: 14, overflowWrap: 'anywhere' }}>☑ {item.text}</span>
+              {canEdit ? (
+                <>
+                  <select value={item.roomId || ''} disabled={saving} onChange={(e) => retag(idx, e.target.value)}
+                    aria-label="Tag"
+                    style={{ fontSize: 12, flex: '1 1 120px', maxWidth: 200, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--ink)' }}>
+                    <option value="">No tag</option>
+                    {spaces.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                  <button className="btn-icon" disabled={saving || idx === 0} onClick={() => move(idx, -1)} aria-label="Move up">↑</button>
+                  <button className="btn-icon" disabled={saving || idx === items.length - 1} onClick={() => move(idx, 1)} aria-label="Move down">↓</button>
+                  <button className="btn-icon" disabled={saving} onClick={() => remove(idx)} aria-label="Remove step">✕</button>
+                </>
+              ) : item.roomName && <span style={{ fontSize: 11, background: 'var(--teal-pale)', color: 'var(--teal-dark)', borderRadius: 99, padding: '2px 8px' }}>{item.roomName}</span>}
+            </div>
+          ))}
         </div>
-        {error && <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>}
-        <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
-          This task will be added to the cleaning checklist each time a guest checks out.
-        </p>
-        <div className="form-group">
-          <label>Task description</label>
-          <input className="input" placeholder="e.g. Vacuum floor" value={text}
+      )}
+
+      {canEdit && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input className="input" style={{ flex: '1 1 200px' }} placeholder="e.g. Reset thermostat to 72°" value={text}
             onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSave(); } }} />
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+          <select className="input" style={{ flex: '0 1 170px' }} value={roomId} onChange={(e) => setRoomId(e.target.value)} aria-label="Tag (optional)">
+            <option value="">No tag</option>
+            {spaces.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          </select>
+          <button className="btn btn-primary" onClick={add} disabled={saving || !text.trim()}>+ Add step</button>
         </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Add task'}
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -469,12 +510,6 @@ const ENTITY_GROUPS = [
   { type: 'SPACE',     icon: '🌿', label: 'Spaces' },
 ];
 
-const CLEANING_SECTION = {
-  wrapper: { background: '#f0f9ff', borderRadius: 8, padding: '12px 14px', marginBottom: 16 },
-  header:  { fontSize: 13, fontWeight: 600, color: '#0369a1', marginBottom: 10 },
-  item:    { fontSize: 13, padding: '5px 10px', background: '#e0f2fe',
-             borderRadius: 6, border: '1px solid #bae6fd', color: '#0c4a6e' },
-};
 const MAINT_SECTION = {
   wrapper: { background: '#fffbeb', borderRadius: 8, padding: '12px 14px' },
   header:  { fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 10 },
@@ -569,7 +604,6 @@ export default function ListingDetail() {
   const [roomModal, setRoomModal]         = useState(false);
   const [editRoom, setEditRoom]           = useState(null);
   const [taskModal, setTaskModal]         = useState(null);
-  const [checklistModal, setChecklistModal] = useState(null);
   const [sendLinkModal, setSendLinkModal] = useState(null);
   const [withdrawing, setWithdrawing]     = useState(null);
   const [expanded, setExpanded]           = useState({});
@@ -661,19 +695,6 @@ export default function ListingDetail() {
     loadMaintenance();
   };
 
-  const handleDeleteChecklistItem = async (entity, itemIndex) => {
-    if (!window.confirm('Remove this cleaning task?')) return;
-    const updated = (entity.checklistItems || [])
-      .filter((_, i) => i !== itemIndex)
-      .map((c) => c.text);
-    await api.put(`/rooms/${entity.id}`, {
-      name: entity.name,
-      entityType: entity.entityType,
-      checklist: updated,
-    });
-    loadMaintenance();
-  };
-
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Delete this task?')) return;
     try {
@@ -687,6 +708,15 @@ export default function ListingDetail() {
   const handleCompleteTask = async (taskId) => {
     await api.patch(`/maintenance/${taskId}/complete`);
     loadMaintenance();
+  };
+
+  const handleMarkJobDone = async (jobId, completed) => {
+    try {
+      const { data } = await api.patch(`/jobs/${jobId}/status`, { completed });
+      setJobs((prev) => prev.map((j) => (j.id === jobId ? data : j)));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not update the job');
+    }
   };
 
   const handleToggleChecklistItem = async (jobId, itemId, currentCompleted) => {
@@ -788,6 +818,8 @@ export default function ListingDetail() {
       {/* ── Spaces & Appliances tab ── */}
       {!pm && tab === 'spaces' && (
         <>
+          <ResetListCard listingId={id} spaces={allRooms} canEdit={canManageTasks} />
+
           <div className="section-header" style={{ gap: 16 }}>
             <h2>Spaces & Appliances</h2>
             <button className="btn btn-primary" onClick={() => { setEditRoom(null); setRoomModal(true); }}>
@@ -812,9 +844,6 @@ export default function ListingDetail() {
                     {entities.map((entity) => {
                       const isOpen    = !!expanded[entity.id];
                       const tasks     = entity.maintenanceTasks || [];
-                      const checklist = entity.checklistItems || [];
-                      const isRoom    = entity.entityType === 'ROOM';
-                      const jobCount  = jobs.filter((j) => j.room?.id === entity.id).length;
 
                       return (
                         <div key={entity.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -826,7 +855,6 @@ export default function ListingDetail() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <span style={{ fontWeight: 600 }}>{entity.name}</span>
                               <span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>
-                                {isRoom && `${jobCount} cleaning job${jobCount !== 1 ? 's' : ''} · `}
                                 {tasks.length} maintenance
                               </span>
                             </div>
@@ -839,34 +867,6 @@ export default function ListingDetail() {
 
                           {isOpen && (
                             <div style={{ borderTop: '1px solid var(--border)', padding: '16px' }}>
-                              {isRoom && (
-                                <div style={CLEANING_SECTION.wrapper}>
-                                  <p style={CLEANING_SECTION.header}>🧹 Guest Turnover Tasks</p>
-                                  {checklist.length === 0 ? (
-                                    <p style={{ fontSize: 13, color: '#0369a1', marginBottom: 10 }}>No cleaning tasks yet.</p>
-                                  ) : (
-                                    <div className="stack" style={{ gap: 6, marginBottom: 10 }}>
-                                      {checklist.map((item, idx) => (
-                                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between',
-                                          alignItems: 'center', ...CLEANING_SECTION.item }}>
-                                          <span>☑ {item.text}</span>
-                                          <button
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer',
-                                              color: '#0369a1', fontSize: 14, lineHeight: 1 }}
-                                            onClick={() => handleDeleteChecklistItem(entity, idx)}>
-                                            ×
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                  <button className="btn btn-secondary btn-sm"
-                                    onClick={() => setChecklistModal(entity)}>
-                                    + Add cleaning task
-                                  </button>
-                                </div>
-                              )}
-
                               <div style={MAINT_SECTION.wrapper}>
                                 <p style={MAINT_SECTION.header}>🔧 Scheduled Maintenance</p>
                                 {tasks.length === 0 ? (
@@ -967,26 +967,17 @@ export default function ListingDetail() {
               date: j.checkoutDate,
               dateKey: key,
               guestName: j.guestName,
-              rooms: [],
+              jobs: [],
             };
           }
-          const roomName = j.room?.name || 'Room';
-          const alreadyAdded = jobsByDate[key].rooms.some((r) => r.roomName === roomName);
-          if (!alreadyAdded) {
-            jobsByDate[key].rooms.push({
-              jobId: j.id,
-              roomName,
-              status: j.status,
-              checklist: j.checklist || [],
-            });
-          }
+          jobsByDate[key].jobs.push({ jobId: j.id, status: j.status, checklist: j.checklist || [] });
         });
 
         const cleaningGroups = Object.values(jobsByDate);
 
-        const groupStatus = (rooms) => {
-          if (rooms.every((r) => r.status === 'completed')) return 'completed';
-          if (rooms.some((r) => r.status === 'in_progress')) return 'in_progress';
+        const groupStatus = (jobList) => {
+          if (jobList.every((r) => r.status === 'completed')) return 'completed';
+          if (jobList.some((r) => r.status === 'in_progress' || r.checklist.some((c) => c.completed))) return 'in_progress';
           return 'pending';
         };
 
@@ -998,9 +989,9 @@ export default function ListingDetail() {
           (a, b) => new Date(a.date) - new Date(b.date)
         );
 
-        // Unique room names for filter dropdown
+        // Unique room / appliance names for filter dropdown (maintenance rooms + reset-step tags)
         const roomNames = [...new Set([
-          ...cleaningGroups.flatMap((g) => g.rooms.map((r) => r.roomName)),
+          ...cleaningGroups.flatMap((g) => g.jobs.flatMap((r) => r.checklist.map((c) => c.tag))),
           ...maintItems.map((t) => t.roomName),
         ])].filter(Boolean).sort();
 
@@ -1010,11 +1001,11 @@ export default function ListingDetail() {
           if (filterType === 'cleaning' && item._type !== 'cleaning_group') return false;
           if (filterType === 'maintenance' && item._type !== 'maintenance') return false;
           if (filterRoom) {
-            if (item._type === 'cleaning_group' && !item.rooms.some((r) => r.roomName === filterRoom)) return false;
+            if (item._type === 'cleaning_group' && !item.jobs.some((r) => r.checklist.some((c) => c.tag === filterRoom))) return false;
             if (item._type === 'maintenance' && item.roomName !== filterRoom) return false;
           }
           if (filterStatus) {
-            if (item._type === 'cleaning_group' && groupStatus(item.rooms) !== filterStatus) return false;
+            if (item._type === 'cleaning_group' && groupStatus(item.jobs) !== filterStatus) return false;
             if (item._type === 'maintenance' && item.status !== filterStatus.toUpperCase()) return false;
           }
           return true;
@@ -1029,11 +1020,11 @@ export default function ListingDetail() {
           if (filterType === 'cleaning' && item._type !== 'cleaning_group') return false;
           if (filterType === 'maintenance' && item._type !== 'maintenance') return false;
           if (filterRoom) {
-            if (item._type === 'cleaning_group' && !item.rooms.some((r) => r.roomName === filterRoom)) return false;
+            if (item._type === 'cleaning_group' && !item.jobs.some((r) => r.checklist.some((c) => c.tag === filterRoom))) return false;
             if (item._type === 'maintenance' && item.roomName !== filterRoom) return false;
           }
           if (filterStatus) {
-            if (item._type === 'cleaning_group' && groupStatus(item.rooms) !== filterStatus) return false;
+            if (item._type === 'cleaning_group' && groupStatus(item.jobs) !== filterStatus) return false;
             if (item._type === 'maintenance' && item.status !== filterStatus.toUpperCase()) return false;
           }
           return true;
@@ -1220,7 +1211,7 @@ export default function ListingDetail() {
                       {otherItems.map((item) => {
 
                         if (item._type === 'cleaning_group') {
-                    const aggStatus  = groupStatus(item.rooms);
+                    const aggStatus  = groupStatus(item.jobs);
                     const isDone     = aggStatus === 'completed';
                     const colorSet   = isDone ? JOB_COLORS.done : JOB_COLORS.active;
                     const dateKey    = item.dateKey;
@@ -1283,11 +1274,29 @@ export default function ListingDetail() {
                         )}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {item.rooms.map((r) => {
-                            const roomDone   = r.status === 'completed';
-                            const isRoomOpen = !!expandedRooms[r.jobId];
+                          {item.jobs.map((r) => {
+                            const jobDone    = r.status === 'completed';
+                            const isOpenList = !!expandedRooms[r.jobId];
                             const checklist  = r.checklist;
                             const doneCount  = checklist.filter((c) => c.completed).length;
+
+                            // No reset list: the whole turnover is one task
+                            if (checklist.length === 0) {
+                              return (
+                                <div key={r.jobId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                                  padding: '7px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                                  <span style={{ fontSize: 12, color: colorSet.color, opacity: 0.8 }}>
+                                    Single task — no reset steps for this property
+                                  </span>
+                                  {canManageTasks && (
+                                    <button className="btn btn-secondary btn-sm" style={{ fontSize: 11 }}
+                                      onClick={() => handleMarkJobDone(r.jobId, !jobDone)}>
+                                      {jobDone ? 'Reopen' : '✓ Mark done'}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
 
                             return (
                               <div key={r.jobId}>
@@ -1295,67 +1304,47 @@ export default function ListingDetail() {
                                   onClick={() => toggleRoom(r.jobId)}
                                   style={{ display: 'flex', justifyContent: 'space-between',
                                     alignItems: 'center', padding: '7px 10px', borderRadius: 7,
-                                    background: roomDone ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.6)',
+                                    background: jobDone ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.6)',
                                     border: '1px solid rgba(0,0,0,0.06)',
                                     cursor: 'pointer', userSelect: 'none' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 600, color: colorSet.color,
-                                      opacity: roomDone ? 0.6 : 1 }}>
-                                      🛏 {r.roomName}
-                                    </span>
-                                    {checklist.length > 0 && (
-                                      <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.6 }}>
-                                        {doneCount}/{checklist.length} tasks done
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.8 }}>
-                                      {STATUS_LABEL[r.status]}
-                                    </span>
-                                    <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.4 }}>
-                                      {isRoomOpen ? '▲' : '▼'}
-                                    </span>
-                                  </div>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: colorSet.color, opacity: jobDone ? 0.6 : 1 }}>
+                                    Reset checklist · {doneCount}/{checklist.length} steps done
+                                  </span>
+                                  <span style={{ fontSize: 11, color: colorSet.color, opacity: 0.4 }}>
+                                    {isOpenList ? '▲' : '▼'}
+                                  </span>
                                 </div>
 
-                                {isRoomOpen && (
+                                {isOpenList && (
                                   <div style={{ margin: '3px 0 3px 10px', padding: '8px 12px',
                                     borderRadius: 7, background: 'rgba(255,255,255,0.5)',
                                     border: '1px solid rgba(0,0,0,0.05)' }}>
-                                    {checklist.length === 0 ? (
-                                      <p style={{ fontSize: 12, color: colorSet.color, opacity: 0.6, margin: 0 }}>
-                                        No checklist items for this room.
-                                      </p>
-                                    ) : (
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                                        {checklist.map((ci) => (
-                                          <div key={ci.id}
-                                            style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-                                            <input
-                                              type="checkbox"
-                                              checked={!!ci.completed}
-                                              readOnly
-                                              style={{ width: 15, height: 15, flexShrink: 0, marginTop: 2,
-                                                cursor: 'default', pointerEvents: 'none',
-                                                accentColor: '#10b981' }}
-                                            />
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                              <span style={{ fontSize: 12, color: colorSet.color,
-                                                textDecoration: ci.completed ? 'line-through' : 'none',
-                                                opacity: ci.completed ? 0.45 : 1 }}>
-                                                {ci.text}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                                      {checklist.map((ci) => (
+                                        <div key={ci.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={!!ci.completed}
+                                            readOnly
+                                            style={{ width: 15, height: 15, flexShrink: 0, marginTop: 2,
+                                              cursor: 'default', pointerEvents: 'none',
+                                              accentColor: '#10b981' }}
+                                          />
+                                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span style={{ fontSize: 12, color: colorSet.color,
+                                              textDecoration: ci.completed ? 'line-through' : 'none',
+                                              opacity: ci.completed ? 0.45 : 1 }}>
+                                              {ci.text}{ci.tag && <em style={{ opacity: 0.6, fontStyle: 'normal' }}> · {ci.tag}</em>}
+                                            </span>
+                                            {ci.completed && ci.completedAt && (
+                                              <span style={{ fontSize: 10, color: colorSet.color, opacity: 0.5, marginTop: 1 }}>
+                                                ✓ {new Date(ci.completedAt).toLocaleString()}
                                               </span>
-                                              {ci.completed && ci.completedAt && (
-                                                <span style={{ fontSize: 10, color: colorSet.color, opacity: 0.5, marginTop: 1 }}>
-                                                  ✓ {new Date(ci.completedAt).toLocaleString()}
-                                                </span>
-                                              )}
-                                            </div>
+                                            )}
                                           </div>
-                                        ))}
-                                      </div>
-                                    )}
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1472,10 +1461,6 @@ export default function ListingDetail() {
       {taskModal && (
         <AddTaskModal listingId={id} room={taskModal} onClose={() => setTaskModal(null)}
           onSaved={() => { setTaskModal(null); loadMaintenance(); }} />
-      )}
-      {checklistModal && (
-        <AddChecklistItemModal room={checklistModal} onClose={() => setChecklistModal(null)}
-          onSaved={() => { setChecklistModal(null); loadMaintenance(); }} />
       )}
       {sendLinkModal && (
         <SendLinkModal

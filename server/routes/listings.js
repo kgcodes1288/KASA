@@ -2,6 +2,7 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { syncListing } = require('../services/icalPoller');
+const { getResetItems } = require('../lib/turnover');
 
 // Helper: check if user is owner or accepted co-host of a listing
 async function hasAccess(listingId, userId) {
@@ -142,6 +143,79 @@ router.get('/:id/members', auth, async (req, res) => {
     ];
 
     res.json(members);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/listings/:id/reset-list — the steps copied onto every checkout job
+router.get('/:id/reset-list', auth, async (req, res) => {
+  try {
+    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    if (!listing) return res.status(404).json({ message: 'Not found' });
+    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+    const items = await getResetItems(listing.id);
+    res.json(items.map((i) => ({ id: i.id, text: i.text, order: i.order, roomId: i.roomId, roomName: i.room?.name || null })));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/listings/:id/reset-list — replace the list. Body: { items: [{ text, roomId? }] }
+// Added steps are also added to, and removed steps taken off, upcoming checkout jobs that are not finished yet.
+router.put('/:id/reset-list', auth, async (req, res) => {
+  if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
+  try {
+    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    if (!listing) return res.status(404).json({ message: 'Not found' });
+    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+
+    const raw = Array.isArray(req.body.items) ? req.body.items : [];
+    const rooms = await prisma.room.findMany({ where: { listingId: listing.id }, select: { id: true, name: true } });
+    const roomById = Object.fromEntries(rooms.map((r) => [r.id, r]));
+    const roomByName = Object.fromEntries(rooms.map((r) => [r.name.toLowerCase(), r]));
+    const items = raw
+      .map((i) => ({
+        text: String(i.text || '').trim(),
+        roomId: i.roomId && roomById[i.roomId] ? i.roomId : (i.roomName && roomByName[String(i.roomName).toLowerCase()]?.id) || null,
+      }))
+      .filter((i) => i.text);
+
+    const beforeItems = await getResetItems(listing.id);
+    const before = new Set(beforeItems.map((i) => i.text.toLowerCase()));
+    await prisma.$transaction([
+      prisma.resetItem.deleteMany({ where: { listingId: listing.id } }),
+      prisma.resetItem.createMany({ data: items.map((i, order) => ({ ...i, order, listingId: listing.id })) }),
+    ]);
+
+    const after = new Set(items.map((i) => i.text.toLowerCase()));
+    const removed = beforeItems.filter((i) => !after.has(i.text.toLowerCase())).map((i) => i.text.toLowerCase());
+    const added = items.filter((i) => !before.has(i.text.toLowerCase()));
+    if (removed.length || added.length) {
+      const active = await prisma.job.findMany({
+        where: { listingId: listing.id, status: { in: ['pending', 'in_progress'] } },
+        include: { checklistItems: true },
+      });
+      for (const job of active) {
+        // steps taken off the list disappear from unfinished jobs (ticked ones stay as a record)
+        const gone = job.checklistItems.filter((c) => !c.completed && removed.includes(c.text.trim().toLowerCase())).map((c) => c.id);
+        if (gone.length) {
+          await prisma.jobChecklist.deleteMany({ where: { id: { in: gone } } });
+          job.checklistItems = job.checklistItems.filter((c) => !gone.includes(c.id));
+          if (!job.checklistItems.length) await prisma.job.update({ where: { id: job.id }, data: { status: 'pending' } });
+        }
+        const have = new Set(job.checklistItems.map((c) => c.text.trim().toLowerCase()));
+        const toAdd = added.filter((i) => !have.has(i.text.toLowerCase()));
+        if (toAdd.length) {
+          await prisma.jobChecklist.createMany({
+            data: toAdd.map((i) => ({ jobId: job.id, text: i.text, tag: i.roomId ? roomById[i.roomId].name : null })),
+          });
+        }
+      }
+    }
+
+    const saved = await getResetItems(listing.id);
+    res.json(saved.map((i) => ({ id: i.id, text: i.text, order: i.order, roomId: i.roomId, roomName: i.room?.name || null })));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
