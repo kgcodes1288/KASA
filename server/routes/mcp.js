@@ -70,7 +70,8 @@ router.get('/connections', auth, async (req, res) => {
       if (t.lastUsedAt && (!c.lastUsedAt || t.lastUsedAt > c.lastUsedAt)) c.lastUsedAt = t.lastUsedAt;
     });
     const recent = await prisma.mcpAuditLog.findMany({
-      where: { userId: req.user.id, NOT: { detail: 'awaiting confirmation' } },
+      // detail is NULL for most rows; a plain NOT(detail = x) would silently drop those
+      where: { userId: req.user.id, OR: [{ detail: null }, { detail: { not: 'awaiting confirmation' } }] },
       orderBy: { createdAt: 'desc' }, take: 15,
       select: { id: true, tool: true, isWrite: true, ok: true, createdAt: true },
     });

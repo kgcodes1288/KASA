@@ -43,7 +43,7 @@ export default function ConnectedApps() {
             <li><strong>Claude:</strong> Settings → Connectors → Add custom connector → paste the URL.</li>
             <li><strong>ChatGPT:</strong> Settings → Apps → Advanced → Developer mode on, then create a connector with the URL (paid plans).</li>
             <li><strong>Gemini:</strong> Settings → Connected apps → Add a custom app → paste the URL.</li>
-            <li>Sign in with your CleanStay email and password when asked, then choose what to allow.</li>
+            <li>Your assistant sends you back to CleanStay. Approve the connection there (you're already signed in) and choose what to allow.</li>
           </ol>
         </div>
       ) : (
