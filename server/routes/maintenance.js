@@ -3,7 +3,7 @@ const prisma = require('../lib/prisma');
 const authenticate = require('../middleware/auth');
 const { notify } = require('../lib/notify');
 const crypto = require('crypto');
-const twilio = require('twilio');
+const { sendSms } = require('../lib/sendSms');
 const cloudinary = require('cloudinary').v2;
 
 cloudinary.config({
@@ -11,11 +11,6 @@ cloudinary.config({
   api_key:    process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
 
 function addMonths(date, months) {
   const d = new Date(date);
@@ -377,9 +372,8 @@ taskRouter.post('/:taskId/assign', authenticate, async (req, res) => {
 
       console.log(`[MaintenanceToken] Contractor link: ${link}`);
 
-      await twilioClient.messages.create({
+      await sendSms({
         to: e164,
-        from: process.env.TWILIO_PHONE,
         body: `Hi! You've been assigned a maintenance task "${task.title}" at ${task.listing.name}. Due: ${new Date(task.nextDueAt).toLocaleDateString()}. View details here: ${link}`,
       });
 
