@@ -61,6 +61,13 @@ const AI_POINTS = [
   'You choose the access: view only, or view and make changes. Disconnect any time',
 ];
 
+// Scroll back up to the form and focus its first field (used when a button points at the page you're already on)
+function focusForm(e) {
+  e.preventDefault();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => document.querySelector('.landing-card-wrap input')?.focus({ preventScroll: true }), 500);
+}
+
 export default function AuthLanding({ mode = 'login', children }) {
   const [playing, setPlaying] = useState(false);
   const [aiSeen, setAiSeen] = useState(false);
@@ -248,8 +255,12 @@ export default function AuthLanding({ mode = 'login', children }) {
         <h2>Ready to make turnovers effortless?</h2>
         <p>Bring your hosts, co-hosts and cleaners onto the same page.</p>
         <div className="landing-final-actions">
-          <Link to="/register" className="landing-big landing-big--solid">Create your account</Link>
-          <Link to="/login" className="landing-big landing-big--ghost">Sign in</Link>
+          {mode === 'register'
+            ? <a href="#top" onClick={focusForm} className="landing-big landing-big--solid">Create your account</a>
+            : <Link to="/register" className="landing-big landing-big--solid">Create your account</Link>}
+          {mode === 'login'
+            ? <a href="#top" onClick={focusForm} className="landing-big landing-big--ghost">Sign in</a>
+            : <Link to="/login" className="landing-big landing-big--ghost">Sign in</Link>}
         </div>
       </section>
 

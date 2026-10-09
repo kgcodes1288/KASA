@@ -108,10 +108,14 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 /* ── Modal ── */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(15,14,12,0.45); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.15s ease; }
 @keyframes fadeIn { from { opacity: 0; } }
-.modal { background: var(--bg-card); border-radius: var(--radius-lg); padding: 28px; width: 100%; max-width: 480px; box-shadow: var(--shadow-lg); animation: slideUp 0.18s ease; }
+.modal { --modal-pad: 28px; background: var(--bg-card); border-radius: var(--radius-lg); padding: var(--modal-pad); width: 100%; max-width: 480px; box-shadow: var(--shadow-lg); animation: slideUp 0.18s ease;
+  /* never taller than the visible screen (dvh = excludes iOS Safari's collapsing toolbars); scroll inside instead */
+  max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px;
+  /* stays pinned to the bottom of the scrolling modal so Save/Cancel are always reachable */
+  position: sticky; bottom: calc(-1 * var(--modal-pad)); margin-bottom: calc(-1 * var(--modal-pad)); padding: 14px 0 var(--modal-pad); background: var(--bg-card); }
 
 /* ── Checklist ── */
 .checklist-item { display: flex; align-items: center; gap: 12px; padding: 11px 14px; background: var(--bg); border-radius: var(--radius); border: 1.5px solid var(--border); transition: all var(--transition); }
@@ -201,15 +205,23 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
   .cluster .btn { flex: 1; justify-content: center; }
 
   /* Modal — full width on mobile */
-  .modal { padding: 20px 16px; }
+  .modal-backdrop { padding: 12px; }
+  .modal { --modal-pad: 20px; padding: var(--modal-pad) 16px; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
   .modal-footer { flex-direction: column; }
   .modal-footer .btn { width: 100%; justify-content: center; }
 
   /* Navbar */
   .navbar-inner { padding: 0 14px; gap: 8px; }
+  /* keep the top bar inside the screen on narrow phones: long names get an ellipsis, brand/buttons never shrink */
+  .navbar-brand, .navbar-inner .btn, .nav-link { flex-shrink: 0; }
+  .navbar-inner .badge { min-width: 0; }
+  .nav-user-name { display: block; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .navbar-brand { font-size: 1.05rem; }
   .nav-link { font-size: 13px; padding: 4px 7px; }
 
   /* Auth */
   .auth-card { padding: 24px 18px; }
 }
+
+/* the role tag is the first thing to go when space is tight */
+@media (max-width: 430px) { .nav-role { display: none; } }
