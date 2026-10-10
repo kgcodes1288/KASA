@@ -369,6 +369,34 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 }
 
 // ── Listing Card ─────────────────────────────────────────────────────────────
+// At-a-glance numbers for a property tile, from the synced checkout jobs and bookings
+function listingGlance(listingJobs, bookings) {
+  const DAYMS = 86400000;
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  const byDate = {};
+  (listingJobs || []).forEach((j) => {
+    if (!j.checkoutDate) return;
+    const k = new Date(j.checkoutDate).toISOString().slice(0, 10);
+    (byDate[k] ||= []).push(j);
+  });
+  const upcoming = Object.entries(byDate)
+    .map(([k, js]) => ({ k, days: Math.round((new Date(k + 'T00:00:00Z') - today) / DAYMS), done: js.every((j) => j.status === 'completed') }))
+    .filter((g) => g.days >= 0 && !g.done)
+    .sort((a, b) => a.days - b.days);
+  const soon = upcoming.filter((g) => g.days <= 14);
+  return { next: upcoming[0], soonCount: soon.length, bookings: (bookings || []).filter((b) => b.type !== 'blocked').length };
+}
+
+function GlanceStat({ label, value, hint, accent }) {
+  return (
+    <div style={{ flex: '1 1 130px', minWidth: 0, padding: '10px 12px', borderRadius: 12, background: 'var(--bg)', borderLeft: `4px solid ${accent}` }}>
+      <div style={{ fontSize: 11, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.25, color: 'var(--ink)' }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--ink-ghost)' }}>{hint}</div>
+    </div>
+  );
+}
+
 function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onDelete, onSync, onAddTask, onInvite, onSetupRooms, syncing, syncErrors, syncMessages, expandedCalendars, toggleCalendar }) {
   const showCal = expandedCalendars[l.id];
   const canEdit = isOwner || coHostRole === 'COHOST';
@@ -428,9 +456,21 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         </div>
       )}
 
+      {(() => {
+        const g = listingGlance(listingJobs, l.bookings);
+        const nextDate = g.next ? new Date(g.next.k + 'T00:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : null;
+        return (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+            <GlanceStat label="Next checkout" value={nextDate || '—'} hint={g.next ? (g.next.days === 0 ? 'Today' : g.next.days === 1 ? 'Tomorrow' : `In ${g.next.days} days`) : 'Nothing scheduled'} accent="var(--teal)" />
+            <GlanceStat label="Next 14 days" value={g.soonCount} hint={g.soonCount === 1 ? 'turnover' : 'turnovers'} accent="var(--amber)" />
+            <GlanceStat label="Bookings" value={g.bookings} hint="synced" accent="var(--ink-ghost)" />
+          </div>
+        );
+      })()}
+
       <div className="cluster">
-        <Link to={`/listings/${l.id}`} className="btn btn-secondary btn-sm">
-          {pm ? '🏠 View Listing' : '🏠 Manage Listing & Jobs'}
+        <Link to={`/listings/${l.id}`} className="btn btn-primary btn-sm">
+          📊 Open dashboard
         </Link>
 
         {canEdit && (
@@ -733,7 +773,7 @@ const handleSync = async (id) => {
               <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 16 }}>
                 My Properties
               </h2>
-              <div className="grid-2" style={{ marginBottom: 32 }}>
+              <div className="listing-grid" style={{ marginBottom: 32 }}>
                 {listings.map((l) => (
                   <ListingCard
                     key={l.id}
@@ -765,7 +805,7 @@ const handleSync = async (id) => {
               <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink)', marginBottom: 16 }}>
                 Shared With Me
               </h2>
-              <div className="grid-2">
+              <div className="listing-grid">
                 {coHostedListings.map((l) => (
                   <ListingCard
                     key={l.id}

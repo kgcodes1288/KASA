@@ -637,7 +637,7 @@ export default function ListingDetail() {
       // Co-hosts land on their dashboard the first time the page loads (unless a tab was requested)
       if (!tabInitialised.current) {
         tabInitialised.current = true;
-        if (!searchParams.get('tab') && lRes.data.hostId !== currentUser?.id) setTab('overview');
+        if (!searchParams.get('tab') && (lRes.data.hostId !== currentUser?.id || lRes.data.managementType === 'SELF')) setTab('overview');
       }
       setAllRooms(rRes.data);
       setJobs(jRes.data.filter((j) => j.listing?.id === id || j.listing === id));
@@ -764,6 +764,7 @@ export default function ListingDetail() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><div className="spinner" /></div>;
   if (!listing) return <div className="page"><p>Listing not found.</p></div>;
   const isCoHostView = listing.hostId !== currentUser?.id;
+  const hasOverview = isCoHostView || listing.managementType === 'SELF';   // dashboard for co-hosts and for owners running it themselves
   const pm = isDelegated(listing) && listing.hostId === currentUser?.id; // owner who delegated to a co-host: overview instead of room/cleaning/job tooling (the co-host keeps those)
 
   return (
@@ -798,7 +799,7 @@ export default function ListingDetail() {
       {!pm && (
       <div className="cluster" style={{ marginBottom: 24 }}>
         {[
-          ...(isCoHostView ? [{ key: 'overview', label: '📊 Overview' }] : []),
+          ...(hasOverview ? [{ key: 'overview', label: '📊 Overview' }] : []),
           { key: 'spaces', label: `🏠 Spaces & Appliances (${allRooms.length})` },
           { key: 'jobs',   label: `📋 Jobs (${new Set(jobs.map((j) => j.checkoutDate ? new Date(j.checkoutDate).toISOString().slice(0, 10) : 'unknown')).size + maintRooms.flatMap((r) => r.maintenanceTasks || []).length})` },
         ].map(({ key, label }) => (
@@ -810,9 +811,9 @@ export default function ListingDetail() {
       </div>
       )}
 
-      {!pm && tab === 'overview' && isCoHostView && (
+      {!pm && tab === 'overview' && hasOverview && (
         <CoHostOverview listing={listing} currentUser={currentUser} jobs={jobs} tokenStatuses={tokenStatuses}
-          canWrite={canManageTasks} onOpenJobs={() => setTab('jobs')} />
+          canWrite={canManageTasks} onOpenJobs={() => setTab('jobs')} selfManaged={!isCoHostView} />
       )}
 
       {/* ── Spaces & Appliances tab ── */}
