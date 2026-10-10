@@ -5,6 +5,7 @@ import './AuthLanding.css';
 // Landing page wrapped around the sign-in / register card.
 const PLAYLIST_ID = 'PLHO1unSFsfcc';
 const FIRST_VIDEO_ID = 'I7ZngKjrvXk';
+const AI_VIDEO_ID = 'sZiuD9MnfGk';   // tutorial 15: Connect your AI assistant
 
 const PERSONAS = [
   {
@@ -66,6 +67,29 @@ function focusForm(e) {
   e.preventDefault();
   window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => document.querySelector('.landing-card-wrap input')?.focus({ preventScroll: true }), 500);
+}
+
+// Click-to-load video: shows the thumbnail and only loads YouTube once it's played
+function AiVideo() {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <div className="landing-ai-video">
+      {playing ? (
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${AI_VIDEO_ID}?autoplay=1&rel=0`}
+          title="How to connect your AI assistant to CleanStay"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+        />
+      ) : (
+        <button type="button" className="landing-ai-video-btn" onClick={() => setPlaying(true)} aria-label="Play video: how to connect your AI assistant">
+          <img src={`https://i.ytimg.com/vi/${AI_VIDEO_ID}/hqdefault.jpg`} alt="" loading="lazy" />
+          <span className="landing-ai-video-play" aria-hidden="true">▶</span>
+          <span className="landing-ai-video-cap">Watch: connect your assistant in a minute</span>
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function AuthLanding({ mode = 'login', children }) {
@@ -149,6 +173,7 @@ export default function AuthLanding({ mode = 'login', children }) {
             <p className="landing-ai-foot">Connect in about a minute, from <b>Account → Chat assistants</b> after you sign up.</p>
           </div>
 
+          <div className="landing-ai-side">
           <div className={`chat-mock ${aiSeen ? 'chat-mock--in' : ''}`} aria-label="Example conversation">
             <div className="chat-bar"><span>🧹</span> Your AI assistant <small>connected to CleanStay</small></div>
             <div className="chat-body">
@@ -169,6 +194,8 @@ export default function AuthLanding({ mode = 'login', children }) {
               </div>
             </div>
             <div className="chat-note">Illustrative example</div>
+          </div>
+          <AiVideo />
           </div>
         </div>
       </section>
