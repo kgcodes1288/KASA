@@ -1,11 +1,11 @@
 .account-page {
   min-height: 100vh;
   padding: 2rem 1rem;
-  background: #f9fafb;
+  background: transparent;
 }
 
 .account-container {
-  max-width: 580px;
+  max-width: 1040px;
   margin: 0 auto;
 }
 
@@ -132,3 +132,19 @@
 
 .btn-primary:hover   { background: #4f46e5; }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Account layout: tabs become a sidebar on wide screens, so the page uses the full width */
+.account-main { min-width: 0; }
+@media (min-width: 900px) {
+  .account-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; }
+  .account-tabs { flex-direction: column !important; border-bottom: none !important; margin-bottom: 0 !important; overflow: visible !important;
+    position: sticky; top: 84px; background: var(--bg-card); border-radius: 14px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .account-tabs .account-tab { text-align: left; border-bottom: none !important; margin-bottom: 0 !important; border-radius: 9px; padding: 11px 14px !important; }
+  .account-tabs .account-tab:hover { background: var(--bg) !important; }
+  .account-tabs .account-tab.is-active { background: var(--teal-pale) !important; }
+  .account-legal-footer { margin-top: 28px; text-align: center; }
+}
+@media (max-width: 899px) {
+  .account-container { max-width: 640px; }
+}
+
+.account-legal-footer { margin-top: 24px; }
