@@ -71,7 +71,7 @@ function TurnoverCard({ g, onOpen }) {
   );
 }
 
-export default function CoHostOverview({ listing, currentUser, jobs, tokenStatuses, canWrite, onOpenJobs }) {
+export default function CoHostOverview({ listing, currentUser, jobs, tokenStatuses, canWrite, onOpenJobs, selfManaged = false }) {
   const [tasks, setTasks] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -147,9 +147,9 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <p style={{ fontSize: 14, margin: 0 }}>
-          🤝 You're managing this property for <strong>{owner}</strong>.
+          {selfManaged ? <>🧑‍🔧 You're running this property yourself. Here's what's coming up.</> : <>🤝 You're managing this property for <strong>{owner}</strong>.</>}
         </p>
-        {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task / quote</button>}
+        {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>{selfManaged ? '+ New task' : '+ New task / quote'}</button>}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(148px, 100%), 1fr))', gap: 12 }}>
@@ -157,7 +157,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
           hint={nextTurnover ? `Next ${new Date(nextTurnover.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'Next 14 days'} accent="var(--teal)" />
         <StatTile icon="⚠️" label="Needs cleaner" value={needCleaner.length} hint={needCleaner.length ? 'Assign in Jobs' : 'All covered'} accent="var(--red)" />
         <StatTile icon="🛠️" label="Maintenance" value={maintenance.length} hint={`Due in ${SOON_DAYS} days`} accent="var(--amber)" />
-        <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} pending` : 'None pending'} accent="var(--amber)" />
+        {!selfManaged && <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} pending` : 'None pending'} accent="var(--amber)" />}
         <StatTile icon="📝" label="Your tasks" value={onMyPlate.length} hint="Waiting on you" accent="var(--ink-ghost)" />
       </div>
 
@@ -174,7 +174,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       )}
       {soonTurnovers.length > 6 && <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 10 }}>+{soonTurnovers.length - 6} more in the Jobs tab.</p>}
 
-      {(pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
+      {!selfManaged && (pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
         <>
           <SectionTitle count={pendingQuotes.length}>Quotes</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
@@ -183,7 +183,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         </>
       )}
 
-      {drafts.length > 0 && (
+      {!selfManaged && drafts.length > 0 && (
         <>
           <SectionTitle count={drafts.length}>Draft invoices</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
@@ -210,7 +210,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       <SectionTitle count={requests.length}>Tasks</SectionTitle>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 14 }}>
         <Column title="On your plate" icon="📝" tasks={onMyPlate} mine empty="Nothing waiting on you 🎉" {...common} busyId={busyId} />
-        <Column title={`With ${owner}`} icon="🤝" tasks={withOwner} mine={false} empty="Nothing waiting on the owner" {...common} busyId={busyId} />
+        {!selfManaged && <Column title={`With ${owner}`} icon="🤝" tasks={withOwner} mine={false} empty="Nothing waiting on the owner" {...common} busyId={busyId} />}
       </div>
 
       {editDraft && (
@@ -220,10 +220,10 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       {showModal && (
         <QuickTaskModal
           listing={listing}
-          isOwner={false}
+          isOwner={selfManaged}
           currentUser={currentUser}
           allowMaintenance
-          allowQuote
+          allowQuote={!selfManaged}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load(); }}
         />
