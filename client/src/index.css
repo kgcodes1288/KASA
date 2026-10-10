@@ -26,6 +26,9 @@
 }
 
 html, body { height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+/* soft hospitality doodles behind the app; cards stay solid white */
+body { background-image: url('./assets/doodles.svg'); background-size: 420px 420px; }
+@media (max-width: 560px) { body { background-size: 340px 340px; } }
 #root { min-height: 100vh; display: flex; flex-direction: column; }
 
 /* ── Typography ── */
