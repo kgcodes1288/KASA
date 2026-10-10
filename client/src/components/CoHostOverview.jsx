@@ -152,7 +152,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task / quote</button>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(104px, 100%), 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(148px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="🧹" label="Turnovers" value={soonTurnovers.length}
           hint={nextTurnover ? `Next ${new Date(nextTurnover.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'Next 14 days'} accent="var(--teal)" />
         <StatTile icon="⚠️" label="Needs cleaner" value={needCleaner.length} hint={needCleaner.length ? 'Assign in Jobs' : 'All covered'} accent="var(--red)" />

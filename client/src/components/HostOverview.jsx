@@ -71,7 +71,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task</button>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(104px, 100%), 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(148px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="⚠️" label="Overdue" value={overdue} hint={overdue ? 'Needs action' : 'Nothing late'} accent="var(--red)" />
         <StatTile icon="⏰" label="Due in 30 days" value={dueSoon} hint="Maintenance" accent="var(--amber)" />
         <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} total` : 'To approve'} accent="var(--amber)" />

@@ -76,8 +76,8 @@ export function StatTile({ icon, label, value, hint, accent }) {
       background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow)',
       padding: '12px 12px', borderLeft: `4px solid ${accent}`, display: 'flex', flexDirection: 'column', gap: 4,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-soft)', whiteSpace: 'nowrap' }}>
-        <span aria-hidden="true">{icon}</span>{label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--ink-soft)', whiteSpace: 'nowrap', minWidth: 0 }}>
+        <span aria-hidden="true" style={{ flex: 'none' }}>{icon}</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
       </div>
       <div style={{ fontFamily: 'var(--font-body)', fontSize: 34, fontWeight: 700, lineHeight: 1.1, color: 'var(--ink)' }}>
         {value}
