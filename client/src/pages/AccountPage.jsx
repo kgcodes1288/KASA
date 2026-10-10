@@ -1112,8 +1112,9 @@ export default function AccountPage() {
           </div>
         </div>
 
+        <div className="account-layout">
         {/* ── Tab Bar ── */}
-        <div style={{
+        <div className="account-tabs" style={{
           display: 'flex',
           gap: 4,
           borderBottom: '2px solid var(--border)',
@@ -1123,6 +1124,7 @@ export default function AccountPage() {
           {tabs.map((tab) => (
             <button
               key={tab}
+              className={activeTab === tab ? 'account-tab is-active' : 'account-tab'}
               onClick={() => setActiveTab(tab)}
               style={{
                 padding: '10px 14px', whiteSpace: 'nowrap',
@@ -1161,6 +1163,7 @@ export default function AccountPage() {
           ))}
         </div>
 
+        <div className="account-main">
         {/* ── Profile Tab ── */}
         {activeTab === 'Profile' && (
           <section className="account-section">
@@ -1291,6 +1294,8 @@ export default function AccountPage() {
 
         {/* ── How To Use ── */}
         <HowToUseSection />
+        </div>
+        </div>
 
         {/* ── Legal Footer ── */}
         <footer className="account-legal-footer">
