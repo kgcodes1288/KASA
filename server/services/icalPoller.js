@@ -1,4 +1,5 @@
 const ical = require('node-ical');
+const { fetchCalendarText } = require('../lib/safeFetch');
 const cron = require('node-cron');
 const prisma = require('../lib/prisma');
 const { notifyCleaningDigest, sendDayOfReminders } = require('../lib/notify');
@@ -24,9 +25,11 @@ async function ensureCalendars(listing) {
 async function syncCalendar(listing, cal, cutoff) {
   let events;
   try {
-    events = await ical.async.fromURL(cal.url);
+    events = ical.parseICS(await fetchCalendarText(cal.url));
   } catch (err) {
-    const msg = String(err.message || err).slice(0, 200);
+    // only our own readable messages are shown; anything else stays generic so internal details never leak
+    const msg = err.friendly ? err.message : 'Could not read this calendar';
+    if (!err.friendly) console.error(`[iCal] ${listing.name} / ${cal.label}: ${err.message}`);
     await prisma.listingCalendar.update({ where: { id: cal.id }, data: { lastError: msg } });
     console.error(`[iCal] ${listing.name} / ${cal.label}: ${msg}`);
     return { ok: false, error: msg, synced: 0, removed: 0 };

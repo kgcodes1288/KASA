@@ -37,13 +37,14 @@ router.post('/listing/:listingId/batch', auth, async (req, res) => {
     const { rooms } = req.body;
     if (!Array.isArray(rooms) || rooms.length === 0)
       return res.status(400).json({ message: 'No rooms provided' });
+    if (rooms.length > 60) return res.status(400).json({ message: 'Too many rooms at once' });
 
     const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
     const created = await Promise.all(
       rooms.map((r) =>
         prisma.room.create({
           data: {
-            name: r.name,
+            name: String(r.name || '').trim().slice(0, 60) || 'Space',
             entityType: validTypes.includes(r.entityType) ? r.entityType : 'ROOM',
             listingId,
           },
@@ -64,6 +65,8 @@ router.post('/', auth, async (req, res) => {
     const ok = await hasListingAccess(listingId, req.user.id);
     if (!ok) return res.status(403).json({ message: 'Not your listing' });
 
+    if (!name || !String(name).trim() || String(name).trim().length > 60)
+      return res.status(400).json({ message: 'Name must be 1–60 characters' });
     const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
     const room = await prisma.room.create({
       data: {
@@ -89,6 +92,8 @@ router.put('/:id', auth, async (req, res) => {
     if (!ok) return res.status(403).json({ message: 'Not your listing' });
 
     const { name, entityType } = req.body;
+    if (name !== undefined && (!String(name).trim() || String(name).trim().length > 60))
+      return res.status(400).json({ message: 'Name must be 1–60 characters' });
     const validTypes = ['ROOM', 'APPLIANCE', 'SPACE'];
     const updated = await prisma.room.update({
       where: { id: req.params.id },

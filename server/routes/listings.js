@@ -19,6 +19,13 @@ async function hasAccess(listingId, userId) {
   return { listing, ok: !!coHost, isOwner: false };
 }
 
+// length limits shared by create/edit
+function fieldLimits({ name, street, city }) {
+  if (name !== undefined && (!String(name).trim() || String(name).length > 80)) return 'Listing name must be 1–80 characters';
+  if (street !== undefined && street !== null && String(street).length > 120) return 'Street must be 120 characters or fewer';
+  if (city !== undefined && city !== null && String(city).length > 80) return 'City must be 80 characters or fewer';
+  return null;
+}
 const MANAGEMENT_TYPES = ['SELF', 'COHOST', 'HOST_WITH_COHOST'];
 
 // Combine street + city into the legacy single-line address
@@ -30,8 +37,10 @@ router.post('/', auth, async (req, res) => {
     return res.status(403).json({ message: 'Only hosts can create listings' });
   try {
     const { name, street, city, managementType, icalUrl, calendars } = req.body;
-    if (!name)
+    if (!name || !String(name).trim())
       return res.status(400).json({ message: 'Listing name is required' });
+    const lim = fieldLimits({ name, street, city });
+    if (lim) return res.status(400).json({ message: lim });
     if (!city || !city.trim())
       return res.status(400).json({ message: 'City is required' });
     if (!MANAGEMENT_TYPES.includes(managementType))
@@ -96,6 +105,8 @@ router.put('/:id', auth, async (req, res) => {
     if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
     const { name, street, city, managementType, icalUrl, calendars, defaultCleanerId } = req.body;
+    const lim = fieldLimits({ name, street, city });
+    if (lim) return res.status(400).json({ message: lim });
     if (managementType !== undefined && !MANAGEMENT_TYPES.includes(managementType))
       return res.status(400).json({ message: 'Invalid management type' });
     if ((city !== undefined || street !== undefined) && !(city ?? listing.city)?.trim())
@@ -181,6 +192,8 @@ router.put('/:id/reset-list', auth, async (req, res) => {
     const rooms = await prisma.room.findMany({ where: { listingId: listing.id }, select: { id: true, name: true } });
     const roomById = Object.fromEntries(rooms.map((r) => [r.id, r]));
     const roomByName = Object.fromEntries(rooms.map((r) => [r.name.toLowerCase(), r]));
+    if (raw.length > 50) return res.status(400).json({ message: 'A reset list can have up to 50 steps' });
+    if (raw.some((i) => String(i?.text || '').trim().length > 200)) return res.status(400).json({ message: 'Each step must be 200 characters or fewer' });
     const items = raw
       .map((i) => ({
         text: String(i.text || '').trim(),

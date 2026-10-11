@@ -1,4 +1,5 @@
 const prisma = require('./prisma');
+const { checkUrl } = require('./safeFetch');
 
 const MAX_CALENDARS = 3;
 const GENERIC_NAME = /^(reserved|booked|unavailable|not available|blocked|closed.*|(airbnb|vrbo|booking\.?com|guest)( guest)?|airbnb guest)$/i;
@@ -27,6 +28,8 @@ function normalizeCalendars(input) {
     if (!url) continue;
     url = url.replace(/^webcal:\/\//i, 'https://');
     if (!/^https?:\/\/\S+$/i.test(url)) throw Object.assign(new Error(`"${url.slice(0, 60)}" is not a valid calendar link (it should start with https://)`), { status: 400 });
+    if (url.length > 1000) throw Object.assign(new Error('That calendar link is too long'), { status: 400 });
+    try { checkUrl(url); } catch (e) { throw Object.assign(new Error(e.message), { status: 400 }); }
     if (seen.has(url)) continue;
     seen.add(url);
     items.push({ id: raw.id || null, url, label: String(raw.label || '').trim().slice(0, 30) || guessLabel(url) });
