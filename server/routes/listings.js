@@ -3,6 +3,10 @@ const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { syncListing } = require('../services/icalPoller');
 const { getResetItems } = require('../lib/turnover');
+const { normalizeCalendars, reconcileCalendars, findConflicts, calendarSelect } = require('../lib/calendars');
+
+const withCalendars = async (listing) => ({ ...listing, calendars: await prisma.listingCalendar.findMany({ where: { listingId: listing.id }, select: calendarSelect, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }), conflicts: await findConflicts(listing.id) });
+const bookingSelect = { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true, calendarId: true };
 
 // Helper: check if user is owner or accepted co-host of a listing
 async function hasAccess(listingId, userId) {
@@ -25,7 +29,7 @@ router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'host')
     return res.status(403).json({ message: 'Only hosts can create listings' });
   try {
-    const { name, street, city, managementType, icalUrl } = req.body;
+    const { name, street, city, managementType, icalUrl, calendars } = req.body;
     if (!name)
       return res.status(400).json({ message: 'Listing name is required' });
     if (!city || !city.trim())
@@ -39,13 +43,16 @@ router.post('/', auth, async (req, res) => {
         city: city.trim(),
         address: composeAddress(street?.trim(), city.trim()),
         managementType,
-        icalUrl: icalUrl || null,
+        icalUrl: null,
         hostId: req.user.id,
       },
     });
-    res.status(201).json(listing);
+    // calendars[] (up to 3); the legacy single icalUrl still works
+    const items = normalizeCalendars(calendars !== undefined ? calendars : (icalUrl ? [{ url: icalUrl }] : []));
+    if (items.length) await reconcileCalendars(listing.id, items);
+    res.status(201).json(await withCalendars(await prisma.listing.findUnique({ where: { id: listing.id } })));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 
@@ -56,14 +63,12 @@ router.get('/', auth, async (req, res) => {
       where: { hostId: req.user.id },
       orderBy: { createdAt: 'desc' },
       include: {
-        bookings: {
-          select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
-          orderBy: { checkoutDate: 'asc' },
-        },
+        bookings: { where: { echo: false }, select: bookingSelect, orderBy: { checkoutDate: 'asc' } },
+        calendars: { select: calendarSelect, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
         _count: { select: { rooms: true } },
       },
     });
-    res.json(listings);
+    res.json(await Promise.all(listings.map(async (l) => ({ ...l, conflicts: await findConflicts(l.id) }))));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -77,7 +82,7 @@ router.get('/:id', auth, async (req, res) => {
       include: { host: { select: { id: true, name: true } } },
     });
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
-    res.json(listing);
+    res.json(await withCalendars(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -90,7 +95,7 @@ router.put('/:id', auth, async (req, res) => {
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
     if (!ok) return res.status(403).json({ message: 'Not authorised' });
 
-    const { name, street, city, managementType, icalUrl, defaultCleanerId } = req.body;
+    const { name, street, city, managementType, icalUrl, calendars, defaultCleanerId } = req.body;
     if (managementType !== undefined && !MANAGEMENT_TYPES.includes(managementType))
       return res.status(400).json({ message: 'Invalid management type' });
     if ((city !== undefined || street !== undefined) && !(city ?? listing.city)?.trim())
@@ -110,13 +115,15 @@ router.put('/:id', auth, async (req, res) => {
           address: composeAddress(newStreet, newCity),
         }),
         ...(managementType !== undefined && { managementType }),
-        ...(icalUrl !== undefined && { icalUrl }),
         ...('defaultCleanerId' in req.body && { defaultCleanerId: defaultCleanerId || null }),
       },
     });
-    res.json(updated);
+    if (calendars !== undefined || icalUrl !== undefined) {
+      await reconcileCalendars(req.params.id, normalizeCalendars(calendars !== undefined ? calendars : (icalUrl ? [{ url: icalUrl }] : [])));
+    }
+    res.json(await withCalendars(await prisma.listing.findUnique({ where: { id: updated.id } })));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.status || 500).json({ message: err.message });
   }
 });
 
@@ -249,6 +256,9 @@ router.post('/:id/sync', auth, async (req, res) => {
       jobsCreated: result?.jobsCreated ?? 0,
       bookingsSynced: result?.bookingsSynced ?? 0,
       reason: result?.reason ?? 'ok',
+      calendars: result?.calendars ?? [],
+      jobsRemoved: result?.jobsRemoved ?? 0,
+      conflicts: result?.conflicts ?? 0,
     });
   } catch (err) {
     console.error('[sync route] error:', err.message);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api';
 import QuickTaskModal from './QuickTaskModal';
 import {
-  fetchListingTasks, calendarDaysUntil, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal,
+  ConflictAlert, fetchListingTasks, calendarDaysUntil, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal,
   Chip, StatTile, SectionTitle, AttentionCard, Column, QuoteCard, DraftInvoiceCard,
 } from './overviewParts';
 import DraftInvoiceModal from './DraftInvoiceModal';
@@ -151,6 +151,8 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
         </p>
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>{selfManaged ? '+ New task' : '+ New task / quote'}</button>}
       </div>
+
+      <ConflictAlert conflicts={listing.conflicts} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(148px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="🧹" label="Turnovers" value={soonTurnovers.length}

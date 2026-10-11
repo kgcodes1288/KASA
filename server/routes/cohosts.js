@@ -141,19 +141,23 @@ router.get('/my-listings', authenticate2, async (req, res) => {
         include: {
           host: { select: { id: true, name: true } },
           bookings: {
-            select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
+            where: { echo: false },
+            select: { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true, calendarId: true },
             orderBy: { checkoutDate: 'asc' },
           },
+          calendars: { select: { id: true, label: true, url: true, order: true, lastSynced: true, lastError: true }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
           _count: { select: { rooms: true } },
         },
       },
     },
   });
 
-  const listings = coHosted.map((c) => ({
+  const { findConflicts } = require('../lib/calendars');
+  const listings = await Promise.all(coHosted.map(async (c) => ({
     ...c.listing,
     coHostRole: c.role,
-  }));
+    conflicts: await findConflicts(c.listing.id),
+  })));
 
   res.json(listings);
 });

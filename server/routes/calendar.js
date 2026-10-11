@@ -37,7 +37,7 @@ router.get('/', auth, async (req, res) => {
         orderBy: { checkoutDate: 'asc' },
       }),
       prisma.booking.findMany({
-        where: { listingId: { in: listingIds } },
+        where: { listingId: { in: listingIds }, echo: false },
         select: { id: true, listingId: true, checkinDate: true, checkoutDate: true, guestName: true, type: true },
         orderBy: { checkoutDate: 'asc' },
       }),

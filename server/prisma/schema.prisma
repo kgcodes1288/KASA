@@ -61,6 +61,7 @@ model Listing {
   rooms             Room[]
   jobs              Job[]
   resetItems        ResetItem[]
+  calendars         ListingCalendar[]
   bookings          Booking[]         @relation("ListingBookings")
   coHosts           ListingCoHost[]   @relation("CoHostListing")
   maintenanceTasks  MaintenanceTask[]
@@ -285,6 +286,21 @@ enum NotifType {
   QUOTE_DECIDED
 }
 
+// One booking-site calendar (iCal link) for a listing: Airbnb, VRBO, Booking.com ... up to 3 per listing
+model ListingCalendar {
+  id         String    @id @default(cuid())
+  label      String    @default("Calendar")
+  url        String
+  order      Int       @default(0)
+  lastSynced DateTime?
+  lastError  String?
+  createdAt  DateTime  @default(now())
+  listingId  String
+
+  listing    Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bookings   Booking[]
+}
+
 model Booking {
   id           String   @id @default(cuid())
   listingId    String
@@ -293,11 +309,14 @@ model Booking {
   guestName    String   @default("Airbnb Guest")
   icalUid      String
   type         String   @default("guest")  // "guest" | "blocked"
+  calendarId   String?
+  echo         Boolean  @default(false)    // same stay already reported by another calendar: hidden, no job
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   listing      Listing  @relation("ListingBookings", fields: [listingId], references: [id], onDelete: Cascade)
+  calendar     ListingCalendar? @relation(fields: [calendarId], references: [id], onDelete: Cascade)
 
   @@unique([listingId, icalUid])
 }

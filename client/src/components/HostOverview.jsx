@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
 import QuickTaskModal from './QuickTaskModal';
-import { fetchListingTasks, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal, StatTile, SectionTitle, AttentionCard, Column, QuoteCard } from './overviewParts';
+import { ConflictAlert, fetchListingTasks, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal, StatTile, SectionTitle, AttentionCard, Column, QuoteCard } from './overviewParts';
 
 // Overview shown to an owner whose listing is run by a co-host: what needs the
 // owner's attention (due maintenance) and the tasks passing between owner and co-host.
@@ -70,6 +70,8 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
         </p>
         {canWrite && <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New task</button>}
       </div>
+
+      <ConflictAlert conflicts={listing.conflicts} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(148px, 100%), 1fr))', gap: 12 }}>
         <StatTile icon="⚠️" label="Overdue" value={overdue} hint={overdue ? 'Needs action' : 'Nothing late'} accent="var(--red)" />

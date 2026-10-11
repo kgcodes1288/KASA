@@ -198,7 +198,13 @@ function MiniCalendar({ jobs, bookings }) {
 // ── Listing Modal ────────────────────────────────────────────────────────────
 function ListingModal({ onClose, onSaved, listing, canChangeRole = true }) {
   const editing = !!listing;
-  const [form, setForm] = useState(listing ? { ...listing, street: listing.street || '', city: listing.city || '', icalUrl: listing.icalUrl || '' } : { name: '', street: '', city: '', managementType: '', icalUrl: '' });
+  const [form, setForm] = useState(listing ? { ...listing, street: listing.street || '', city: listing.city || '' } : { name: '', street: '', city: '', managementType: '' });
+  // one row per booking-site calendar (max 3); a listing from before multi-calendar support has just icalUrl
+  const [calendars, setCalendars] = useState(
+    listing?.calendars?.length ? listing.calendars.map((c) => ({ id: c.id, label: c.label, url: c.url }))
+      : listing?.icalUrl ? [{ label: '', url: listing.icalUrl }] : [{ label: '', url: '' }]
+  );
+  const setCal = (i, k, v) => setCalendars((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -215,7 +221,7 @@ function ListingModal({ onClose, onSaved, listing, canChangeRole = true }) {
       name:    form.name,
       street:  form.street?.trim() || null,
       city:    form.city.trim(),
-      icalUrl: form.icalUrl  || null,
+      calendars: calendars.filter((c) => c.url.trim()).map((c) => ({ id: c.id, label: c.label.trim() || undefined, url: c.url.trim() })),
       ...(canChangeRole && { managementType: form.managementType }),
     };
     try {
@@ -284,9 +290,30 @@ function ListingModal({ onClose, onSaved, listing, canChangeRole = true }) {
           </div>
         )}
         <div className="form-group">
-          <label>Airbnb iCal URL <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
-          <input className="input" placeholder="https://www.airbnb.com/calendar/ical/..." value={form.icalUrl} onChange={(e) => set('icalUrl', e.target.value)} />
-          <p style={{ fontSize: 12, marginTop: 4 }}>Find this in Airbnb → Listing → Availability → Export calendar. You can add it later.</p>
+          <label>Booking calendars <span style={{ fontWeight: 400, color: 'var(--ink-ghost)' }}>(optional)</span></label>
+          <datalist id="cal-sites"><option value="Airbnb" /><option value="VRBO" /><option value="Booking.com" /><option value="Expedia" /><option value="Other" /></datalist>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {calendars.map((c, i) => (
+              <div key={i} className="cal-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <input className="input" list="cal-sites" placeholder="Site (e.g. Airbnb)" aria-label="Calendar site" value={c.label}
+                  onChange={(e) => setCal(i, 'label', e.target.value)} style={{ flex: '0 1 150px', minWidth: 0 }} maxLength={30} />
+                <input className="input" placeholder="https://… calendar (iCal) link" aria-label="Calendar link" value={c.url}
+                  onChange={(e) => setCal(i, 'url', e.target.value)} style={{ flex: '1 1 220px', minWidth: 0 }} />
+                {(calendars.length > 1 || c.url) && (
+                  <button type="button" className="btn-icon" aria-label="Remove calendar"
+                    onClick={() => setCalendars((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : [{ label: '', url: '' }]))}>✕</button>
+                )}
+              </div>
+            ))}
+          </div>
+          {calendars.length < 3 && (
+            <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 10 }}
+              onClick={() => setCalendars((cs) => [...cs, { label: '', url: '' }])}>+ Add another calendar</button>
+          )}
+          <p style={{ fontSize: 12, marginTop: 8 }}>
+            Listed on more than one site (Airbnb, VRBO, Booking.com…)? Add each site's calendar link so every booking and checkout shows up.
+            Find it in each site's calendar settings under Export / Sync calendar. You can add these later.
+          </p>
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
@@ -369,6 +396,8 @@ function QuickInviteModal({ listing, onClose, onSaved }) {
 }
 
 // ── Listing Card ─────────────────────────────────────────────────────────────
+const fmtShort = (d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
 // At-a-glance numbers for a property tile, from the synced checkout jobs and bookings
 function listingGlance(listingJobs, bookings) {
   const DAYMS = 86400000;
@@ -431,9 +460,20 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
         {!isOwner && <RoleBadge role={coHostRole} />}
       </div>
 
-      {l.icalUrl && (
-        <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14 }}>
-          {l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}
+      {(l.calendars?.length > 0 || l.icalUrl) && (
+        <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          {l.calendars?.length > 0 ? l.calendars.map((c) => (
+            <span key={c.id} title={c.lastError || (c.lastSynced ? `Last synced ${new Date(c.lastSynced).toLocaleString()}` : 'Not synced yet')}
+              style={{ padding: '3px 9px', borderRadius: 99, background: c.lastError ? 'var(--red-pale)' : 'var(--bg)', color: c.lastError ? '#991b1b' : 'var(--ink-soft)', border: '1px solid var(--border)' }}>
+              {c.lastError ? '⚠️' : c.lastSynced ? '✓' : '·'} {c.label}
+            </span>
+          )) : null}
+          <span>{l.lastSynced ? `Last synced: ${new Date(l.lastSynced).toLocaleString()}` : 'Never synced'}</span>
+        </div>
+      )}
+      {l.conflicts?.length > 0 && (
+        <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12, color: '#92400e' }}>
+          ⚠️ Possible double-booking: {l.conflicts.slice(0, 2).map((c) => `${c.a.label} ${fmtShort(c.a.checkin)}–${fmtShort(c.a.checkout)} overlaps ${c.b.label} ${fmtShort(c.b.checkin)}–${fmtShort(c.b.checkout)}`).join('; ')}
         </div>
       )}
 
@@ -480,7 +520,7 @@ function ListingCard({ l, isOwner, coHostRole, coHosts, listingJobs, onEdit, onD
                 + Add task
               </button>
             )}
-            {l.icalUrl && (
+            {(l.icalUrl || l.calendars?.length > 0) && (
               <button className="btn btn-secondary btn-sm" onClick={() => onSync(l.id)} disabled={syncing[l.id]}>
                 {syncing[l.id] ? '⏳ Syncing…' : '🔄 Sync iCal'}
               </button>
@@ -652,11 +692,14 @@ const handleSync = async (id) => {
     setSyncVersion((v) => v + 1);
 
     // Surface a helpful message based on what happened
-    if (data.jobsCreated === 0) {
-      setSyncMessages((m) => ({ ...m, [id]: '✓ Synced — no new bookings found in your calendar.' }));
-    } else {
-      setSyncMessages((m) => ({ ...m, [id]: `✓ Synced — ${data.jobsCreated} new cleaning job${data.jobsCreated !== 1 ? 's' : ''} created.` }));
-    }
+    const bad = (data.calendars || []).filter((c) => !c.ok);
+    const bits = [];
+    if (data.jobsCreated) bits.push(`${data.jobsCreated} new cleaning job${data.jobsCreated !== 1 ? 's' : ''} created`);
+    if (data.jobsRemoved) bits.push(`${data.jobsRemoved} job${data.jobsRemoved !== 1 ? 's' : ''} removed for cancelled stays`);
+    if (data.conflicts) bits.push(`${data.conflicts} possible double-booking${data.conflicts !== 1 ? 's' : ''}`);
+    let msg = bits.length ? `✓ Synced: ${bits.join(', ')}.` : '✓ Synced: no new bookings found in your calendars.';
+    if (bad.length) msg = `⚠️ ${bad.map((c) => `${c.label} couldn't be read`).join(', ')}. ${msg.replace('✓ ', '')}`;
+    setSyncMessages((m) => ({ ...m, [id]: msg }));
   } catch (err) {
     setSyncErrors((e) => ({ ...e, [id]: err.response?.data?.message || 'Sync failed, please try again' }));
   } finally {
