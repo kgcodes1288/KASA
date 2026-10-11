@@ -2,15 +2,17 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 
-// GET /api/notifications — last 3 days
+// The list and the unread badge look at the SAME window, so the badge never counts something you cannot open
+const WINDOW_DAYS = 14;
+const windowStart = () => { const d = new Date(); d.setDate(d.getDate() - WINDOW_DAYS); return d; };
+
+// GET /api/notifications — last 14 days, newest first (max 100)
 router.get('/', auth, async (req, res) => {
   try {
-    const since = new Date();
-    since.setDate(since.getDate() - 3);
-
     const notifications = await prisma.notification.findMany({
-      where: { userId: req.user.id, createdAt: { gte: since } },
+      where: { userId: req.user.id, createdAt: { gte: windowStart() } },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
 
     res.json(notifications);
@@ -23,7 +25,7 @@ router.get('/', auth, async (req, res) => {
 router.get('/unread-count', auth, async (req, res) => {
   try {
     const count = await prisma.notification.count({
-      where: { userId: req.user.id, read: false },
+      where: { userId: req.user.id, read: false, createdAt: { gte: windowStart() } },
     });
     res.json({ count });
   } catch (err) {

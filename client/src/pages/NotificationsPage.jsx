@@ -83,7 +83,7 @@ export default function NotificationsPage() {
           color: 'var(--ink-ghost)',
           fontSize: 15,
         }}>
-          No notifications in the last 3 days
+          No notifications in the last 14 days
         </div>
       )}
 

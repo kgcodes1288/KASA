@@ -16,6 +16,9 @@ async function deliver(payload) {
 const APP_URL = process.env.CLIENT_URL || 'https://getcleanstays.com';
 const API_URL = process.env.API_URL || 'https://api.getcleanstays.com';   // used for the one-click unsubscribe link in every email
 
+// One-click unsubscribe headers (RFC 8058) so Gmail/Apple Mail show their own Unsubscribe button
+const unsubHeaders = (token) => token ? { 'List-Unsubscribe': `<${API_URL}/api/unsubscribe?token=${token}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : undefined;
+
 function unsubscribeFooter(token) {
   const url = `${API_URL}/api/unsubscribe?token=${token}`;
   return `<p style="margin:8px 0 0;font-size:11px;color:#9ca3af;">
@@ -81,6 +84,7 @@ async function sendNotificationEmail({ to, toName, subject, title, message, acti
       to:   [to],
       subject,
       html,
+      headers: unsubHeaders(unsubscribeToken),
     });
     console.log(`[email] Sent "${subject}" to ${to}`);
   } catch (err) {
@@ -250,7 +254,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
             <thead>
               <tr style="background:#f9fafb;">
                 <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Checkout Date</th>
-                <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Rooms</th>
+                <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Job</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -261,7 +265,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
         </td></tr>
         <tr><td style="padding:16px 32px;border-top:1px solid #f3f4f6;">
           <p style="margin:0;font-size:12px;color:#9ca3af;">
-            You're receiving this because you manage <a href="${actionUrl}" style="color:#0d9488;text-decoration:none;">${listingName}</a> on CleanStay.
+            You're receiving this because you manage <a href="${actionUrl}" style="color:#0d9488;text-decoration:none;">${esc(listingName)}</a> on CleanStay.
           </p>
           ${unsubscribeToken ? unsubscribeFooter(unsubscribeToken) : ''}
         </td></tr>
@@ -275,6 +279,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
     to: [toEmail],
     subject: `${jobs.length} new cleaning job${jobs.length !== 1 ? 's' : ''} added — ${listingName}`,
     html,
+    headers: unsubHeaders(unsubscribeToken),
   });
 
   if (result.error) throw new Error(result.error.message);
@@ -328,6 +333,7 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
     to: [toEmail],
     subject: `🔔 Cleaning reminder today — ${listingName}`,
     html,
+    headers: unsubHeaders(unsubscribeToken),
   });
 
   if (result.error) throw new Error(result.error.message);
