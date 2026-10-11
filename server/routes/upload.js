@@ -3,6 +3,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const authenticate = require('../middleware/auth');
 const crypto = require('crypto');
+const rl = require('../lib/rateLimit');
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -23,7 +24,14 @@ const upload = multer({
 const router = Router();
 
 // POST /api/upload
-router.post('/', authenticate, upload.single('file'), async (req, res) => {
+router.post('/', authenticate, (req, res, next) => {
+  if (rl.hit(`upload|${req.user.id}`, 60 * 60 * 1000).n > 30) return res.status(429).json({ message: 'Too many uploads. Please try again later.' });
+  upload.single('file')(req, res, (err) => {          // turn upload rejections into readable 4xx answers
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ message: 'That file is too large (10 MB maximum).' });
+    return res.status(400).json({ message: err.message && /allowed|Unexpected/.test(err.message) ? 'Only images (JPG, PNG, WebP, GIF) and PDFs are allowed.' : 'Could not read that file.' });
+  });
+}, async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No file provided' });
 
   try {

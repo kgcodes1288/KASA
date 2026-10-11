@@ -3,6 +3,9 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM   = process.env.RESEND_FROM || 'noreply@getcleanstays.com';
 
+// User-controlled text (names, property names, messages) must never reach an email as HTML
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // Resend reports failures in the result ({ error }) instead of throwing: surface them so a rejected address is never logged as sent
 async function deliver(payload) {
   const result = await resend.emails.send(payload);
@@ -48,11 +51,11 @@ async function sendNotificationEmail({ to, toName, subject, title, message, acti
         <!-- Body -->
         <tr>
           <td style="padding:32px;">
-            <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">${title}</p>
-            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">${message}</p>
+            <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">${esc(title)}</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">${esc(message)}</p>
             ${actionUrl ? `
             <a href="${actionUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
-              ${actionLabel || 'View Details'}
+              ${esc(actionLabel || 'View Details')}
             </a>` : ''}
           </td>
         </tr>
@@ -107,14 +110,14 @@ async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, 
         <tr>
           <td style="padding:32px;">
             <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">
-              Message from <strong>${fromName}</strong>${listingName ? ` · ${listingName}` : ''}
+              Message from <strong>${esc(fromName)}</strong>${listingName ? ` · ${esc(listingName)}` : ''}
             </p>
-            <p style="margin:0 0 20px;font-size:18px;font-weight:700;color:#111827;">${subject}</p>
+            <p style="margin:0 0 20px;font-size:18px;font-weight:700;color:#111827;">${esc(subject)}</p>
             <div style="background:#f9fafb;border-radius:8px;padding:16px;margin-bottom:24px;">
-              <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${body}</p>
+              <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;">${esc(body)}</p>
             </div>
             <p style="margin:0;font-size:13px;color:#9ca3af;">
-              Reply directly to this email to respond to ${fromName}.
+              Reply directly to this email to respond to ${esc(fromName)}.
             </p>
           </td>
         </tr>
@@ -174,7 +177,7 @@ async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl
           <td style="padding:32px;">
             <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">You've been invited to co-host</p>
             <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
-              <strong>${fromName}</strong> has invited you to join <strong>${listingName}</strong> as a <strong>${roleLabel}</strong> on CleanStay.
+              <strong>${esc(fromName)}</strong> has invited you to join <strong>${esc(listingName)}</strong> as a <strong>${esc(roleLabel)}</strong> on CleanStay.
             </p>
             <a href="${inviteUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
               Accept Invite
@@ -241,7 +244,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
         <tr><td style="padding:32px;">
           <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">${jobs.length} new cleaning job${jobs.length !== 1 ? 's' : ''} added</p>
           <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
-            The following checkout dates were synced for <strong>${listingName}</strong>:
+            The following checkout dates were synced for <strong>${esc(listingName)}</strong>:
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;margin-bottom:24px;">
             <thead>
@@ -302,7 +305,7 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
         <tr><td style="padding:32px;">
           <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">🔔 Cleaning reminder for today</p>
           <p style="margin:0 0 16px;font-size:15px;color:#6b7280;line-height:1.6;">
-            You have ${jobs.length > 1 ? `${jobs.length} checkouts` : 'a checkout'} today at <strong>${listingName}</strong>:
+            You have ${jobs.length > 1 ? `${jobs.length} checkouts` : 'a checkout'} today at <strong>${esc(listingName)}</strong>:
           </p>
           <ul style="margin:0 0 24px;padding-left:20px;">${jobList}</ul>
           <a href="${actionUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
@@ -349,7 +352,7 @@ async function sendVerificationEmail({ to, name, verifyUrl }) {
         <tr><td style="padding:32px;">
           <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Verify your email address</p>
           <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
-            Hi ${name}, thanks for signing up! Click the button below to verify your email address and activate your account.
+            Hi ${esc(name)}, thanks for signing up! Click the button below to verify your email address and activate your account.
           </p>
           <a href="${verifyUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
             Verify my email
@@ -394,7 +397,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
         <tr><td style="padding:32px;">
           <p style="margin:0 0 8px;font-size:18px;font-weight:700;color:#111827;">Reset your password</p>
           <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6;">
-            Hi ${name}, we received a request to reset your password. Click the button below to choose a new one.
+            Hi ${esc(name)}, we received a request to reset your password. Click the button below to choose a new one.
           </p>
           <a href="${resetUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:600;">
             Reset my password

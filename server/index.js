@@ -47,6 +47,15 @@ app.use('/api/unsubscribe',    require('./routes/unsubscribe'));
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
 
+// last-resort handlers: JSON answers, never stack traces or internals
+app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
+app.use((err, req, res, next) => {            // eslint-disable-line no-unused-vars
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ message: 'That request is too large.' });
+  if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) return res.status(400).json({ message: 'That request could not be read.' });
+  console.error('[unhandled]', err && err.message);
+  res.status(500).json({ message: 'Something went wrong. Please try again.' });
+});
+
 async function main() {
   try {
     await prisma.$connect();
