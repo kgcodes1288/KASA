@@ -93,12 +93,12 @@ export default function ContractorMaintenance() {
             🏠 {data.listingName}
           </p>
           {data.listingAddress && (
-            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>
               📍 {data.listingAddress}
             </p>
           )}
           {data.roomName && (
-            <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 2 }}>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 2 }}>
               🛏 {data.roomName}
             </p>
           )}
@@ -159,7 +159,7 @@ export default function ContractorMaintenance() {
           </button>
         )}
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', marginTop: 24 }}>
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#64748b', marginTop: 24 }}>
           Powered by CleanStay
         </p>
       </div>

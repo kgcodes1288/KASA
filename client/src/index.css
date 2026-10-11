@@ -3,16 +3,16 @@
 :root {
   --ink:       #0f0e0c;
   --ink-soft:  #5a5750;
-  --ink-ghost: #a8a49d;
+  --ink-ghost: #6b675f;   /* was #a8a49d (2.3:1): hint text now meets WCAG AA (5.2:1) */
   --bg:        #f7f5f0;
   --bg-card:   #ffffff;
   --border:    #e4e0d8;
-  --teal:      #00897b;
-  --teal-dark: #00695c;
+  --teal:      #007d70;   /* white-on-teal buttons now 5.0:1 (was 4.3:1) */
+  --teal-dark: #005f54;
   --teal-pale: #e0f2f0;
   --amber:     #f59e0b;
   --amber-pale:#fef3c7;
-  --red:       #ef4444;
+  --red:       #dc2626;
   --red-pale:  #fee2e2;
   --green:     #22c55e;
   --green-pale:#dcfce7;
@@ -194,6 +194,9 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
   .page-narrow { padding: 16px 14px; }
   .section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
   .section-header button { width: 100%; justify-content: center; }
+  /* property page header: title on the left, the settings gear as a small button on the right (not a full-width bar) */
+  .section-header.listing-head { flex-direction: row; align-items: flex-start; gap: 10px; }
+  .section-header.listing-head button { width: auto; flex-shrink: 0; }
 
   /* Grid — stack to single column on mobile */
   .grid-2 { grid-template-columns: 1fr; }
@@ -255,3 +258,6 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 }
 
 @media (max-width: 360px) { .page, .page-narrow { padding-left: 14px; padding-right: 14px; } }
+
+/* very long unbroken words (names, emails, addresses) wrap instead of pushing the layout sideways */
+.page, .modal, .card, .landing-card-wrap { overflow-wrap: anywhere; }

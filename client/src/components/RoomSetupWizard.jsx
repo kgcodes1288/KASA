@@ -407,6 +407,9 @@ export default function RoomSetupWizard({ listing, onClose, onDone }) {
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)',
+          // stays on screen while the steps scroll (short phones, landscape)
+          position: 'sticky', bottom: 'calc(-1 * var(--modal-pad))', marginBottom: 'calc(-1 * var(--modal-pad))',
+          paddingBottom: 'var(--modal-pad)', background: 'var(--bg-card)', zIndex: 1,
         }}>
           {step > 0
             ? <button className="btn btn-secondary" onClick={back}>← Back</button>

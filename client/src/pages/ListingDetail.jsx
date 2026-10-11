@@ -790,7 +790,7 @@ export default function ListingDetail() {
         <Link to="/host" style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>← Back to listings</Link>
       </div>
 
-      <div className="section-header" style={{ alignItems: 'flex-start' }}>
+      <div className="section-header listing-head" style={{ alignItems: 'flex-start' }}>
         <div style={{ flex: 1 }}>
           <h1>{listing.name}</h1>
           {listing.address && <p>📍 {listing.address}</p>}
@@ -1081,18 +1081,18 @@ export default function ListingDetail() {
               <div className="section-header" style={{ marginBottom: 12 }}>
                 <h2>All Jobs</h2>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select style={selStyle} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                  <select aria-label="Filter by type" style={selStyle} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
                     <option value="all">All types</option>
                     <option value="cleaning">🧹 Cleaning only</option>
                     <option value="maintenance">🔧 Maintenance only</option>
                   </select>
                   {roomNames.length > 0 && (
-                    <select style={selStyle} value={filterRoom} onChange={(e) => setFilterRoom(e.target.value)}>
+                    <select aria-label="Filter by room or appliance" style={selStyle} value={filterRoom} onChange={(e) => setFilterRoom(e.target.value)}>
                       <option value="">All rooms</option>
                       {roomNames.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
                   )}
-                  <select style={selStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                  <select aria-label="Filter by status" style={selStyle} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                     <option value="">All statuses</option>
                     <option value="pending">⏳ Pending</option>
                     <option value="in_progress">🧹 In progress</option>
