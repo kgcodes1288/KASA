@@ -4,7 +4,7 @@ import './AuthLanding.css';
 
 // Landing page wrapped around the sign-in / register card.
 const PLAYLIST_ID = 'PLHO1unSFsfcc';
-const FIRST_VIDEO_ID = 'I7ZngKjrvXk';
+const FIRST_VIDEO_ID = 'DFIaiF8wCSE';
 const AI_VIDEO_ID = 'sZiuD9MnfGk';   // tutorial 15: Connect your AI assistant
 
 const PERSONAS = [

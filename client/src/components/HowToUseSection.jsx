@@ -4,7 +4,7 @@ import './HowToUseSection.css';
 // The first video of the "CleanStay Tutorials" playlist is embedded directly. Because the embed carries the
 // playlist id, YouTube automatically plays the next video in the series when this one ends.
 const PLAYLIST_ID = 'PLHO1unSFsfcc';
-const FIRST_VIDEO_ID = 'I7ZngKjrvXk';
+const FIRST_VIDEO_ID = 'DFIaiF8wCSE';
 const PLAYLIST_URL = `https://www.youtube.com/playlist?list=${PLAYLIST_ID}`;
 const EMBED_URL = `https://www.youtube-nocookie.com/embed/${FIRST_VIDEO_ID}?list=${PLAYLIST_ID}&rel=0`;
 
