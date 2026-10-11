@@ -261,3 +261,7 @@ label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 5px; c
 
 /* very long unbroken words (names, emails, addresses) wrap instead of pushing the layout sideways */
 .page, .modal, .card, .landing-card-wrap { overflow-wrap: anywhere; }
+
+/* keyboard users always see where they are */
+:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline-offset: 0; }
