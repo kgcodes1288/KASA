@@ -3,6 +3,28 @@ const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const crypto = require('crypto');
 const { sendSms } = require('../lib/sendSms');
+const rl = require('../lib/rateLimit');
+
+// Who may see / act on a listing's jobs: the owner, an accepted co-host, or the person the job is assigned to
+async function listingRole(listingId, userId) {
+  const listing = await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true, hostId: true } });
+  if (!listing) return { listing: null, member: false };
+  if (listing.hostId === userId) return { listing, member: true };
+  const co = await prisma.listingCoHost.findFirst({ where: { listingId, userId, status: 'ACCEPTED' }, select: { id: true } });
+  return { listing, member: !!co };
+}
+async function canTouchJob(job, userId) {
+  if (job.cleanerId === userId) return true;
+  return (await listingRole(job.listingId, userId)).member;
+}
+
+// US numbers only (the texting service is US): returns +1XXXXXXXXXX or null
+function toE164(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith('1')) return `+${d}`;
+  return null;
+}
 
 const jobInclude = {
   include: {
@@ -55,7 +77,8 @@ router.get('/', auth, async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const job = await prisma.job.findUnique({ where: { id: req.params.id }, ...jobInclude });
-    if (!job) return res.status(404).json({ message: 'Job not found' });
+    if (!job || !(await canTouchJob({ listingId: job.listing.id, cleanerId: job.cleanerId }, req.user.id)))
+      return res.status(404).json({ message: 'Job not found' });
     res.json(fmt(job));
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -66,6 +89,8 @@ router.get('/:id', auth, async (req, res) => {
 router.patch('/:id/checklist/:itemId', auth, async (req, res) => {
   try {
     const { completed } = req.body;
+    const owning = await prisma.jobChecklist.findFirst({ where: { id: req.params.itemId, jobId: req.params.id }, include: { job: { select: { listingId: true, cleanerId: true } } } });
+    if (!owning || !(await canTouchJob(owning.job, req.user.id))) return res.status(404).json({ message: 'Step not found' });
     await prisma.jobChecklist.update({
       where: { id: req.params.itemId },
       data: { completed, completedAt: completed ? new Date() : null },
@@ -117,9 +142,14 @@ router.patch('/:id/assign', auth, async (req, res) => {
     });
     if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
 
+    const cleanerId = req.body.cleanerId || null;
+    if (cleanerId) {
+      const ok = cleanerId === existing.listing.hostId || !!(await prisma.listingCoHost.findFirst({ where: { listingId: existing.listingId, userId: cleanerId, status: 'ACCEPTED' } }));
+      if (!ok) return res.status(400).json({ message: "That person isn't on this property's team. Invite them as a co-host first." });
+    }
     const job = await prisma.job.update({
       where: { id: req.params.id },
-      data: { cleanerId: req.body.cleanerId },
+      data: { cleanerId },
       ...jobInclude,
     });
     res.json(fmt(job));
@@ -132,13 +162,14 @@ router.patch('/:id/assign', auth, async (req, res) => {
 router.post('/send-link', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
 
-  const { listingId, checkoutDate, phone, contractorId } = req.body;
+  const { listingId, checkoutDate, phone, contractorId, consentConfirmed } = req.body;
   if (!listingId || !checkoutDate) {
     return res.status(400).json({ message: 'listingId and checkoutDate are required' });
   }
   if (!phone && !contractorId) {
     return res.status(400).json({ message: 'phone or contractorId is required' });
   }
+  if (Number.isNaN(new Date(checkoutDate).getTime())) return res.status(400).json({ message: 'Invalid checkout date' });
 
   try {
     // Verify listing belongs to this host or they are an accepted co-host
@@ -151,25 +182,32 @@ router.post('/send-link', auth, async (req, res) => {
     });
     if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
 
-    // Resolve phone + name from contractorId or raw phone
+    // Resolve phone + name from contractorId or raw phone. Texting needs the person's agreement.
     let resolvedPhone;
     let resolvedName = null;
 
     if (contractorId) {
-      // Allow lookup from listing owner's contractors OR the requesting user's contractors
       const listingOwnerId = listing.hostId;
       const contractor = await prisma.contractor.findFirst({
-        where: {
-          id: contractorId,
-          hostId: { in: [req.user.id, listingOwnerId] },
-        },
+        where: { id: contractorId, hostId: { in: [req.user.id, listingOwnerId] } },
       });
       if (!contractor) return res.status(404).json({ message: 'Contractor not found' });
-      resolvedPhone = contractor.phone;
+      if (!contractor.smsConsent)
+        return res.status(400).json({ message: `${contractor.name} hasn't agreed to receive texts. Open Account → Contractors, edit them and tick the consent box once they agree.` });
+      resolvedPhone = toE164(contractor.phone);
       resolvedName  = contractor.name;
     } else {
-      resolvedPhone = normalizePhone(phone);
+      if (consentConfirmed !== true)
+        return res.status(400).json({ message: 'Please confirm this person has agreed to receive text messages from CleanStay.' });
+      resolvedPhone = toE164(phone);
     }
+    if (!resolvedPhone) return res.status(400).json({ message: 'That phone number does not look right. Use a 10-digit US number.' });
+
+    // Abuse limits: 30 texts per account per hour, 5 per phone number per day
+    const userBucket = rl.hit(`sms-user|${req.user.id}`, 60 * 60 * 1000);
+    if (userBucket.n > 30) return rl.retry(res, userBucket, "You've sent a lot of texts.");
+    const phoneBucket = rl.hit(`sms-phone|${resolvedPhone}`, 24 * 60 * 60 * 1000);
+    if (phoneBucket.n > 5) return rl.retry(res, phoneBucket, 'This number has already received several texts today.');
 
     // Check checkout date range
     const checkoutStart = new Date(checkoutDate);
@@ -207,6 +245,20 @@ router.post('/send-link', auth, async (req, res) => {
     const expiresAt = new Date(checkoutDate);
     expiresAt.setHours(23, 59, 59, 999);
 
+    const clientUrl = process.env.CLIENT_URL || 'https://getcleanstays.com';
+    const link = `${clientUrl}/job/${token}`;
+
+    // Text FIRST: if the message can't be sent nothing is assigned, so the checkout is never stuck
+    try {
+      await sendSms({
+        to:   resolvedPhone,
+        body: `Hi! You have a cleaning job at ${listing.name} on ${new Date(checkoutDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}. Open your task list here: ${link}`,
+      });
+    } catch (smsErr) {
+      console.error('[send-link] SMS failed:', smsErr.message);
+      return res.status(502).json({ message: "We couldn't send that text. Check the phone number and try again." });
+    }
+
     await prisma.jobToken.create({
       data: {
         token,
@@ -218,20 +270,12 @@ router.post('/send-link', auth, async (req, res) => {
         expiresAt,
       },
     });
-
-    const clientUrl = process.env.CLIENT_URL || 'https://cleanstay.onrender.com';
-    const link = `${clientUrl}/job/${token}`;
-
-    console.log(`[JobToken] Contractor link: ${link}`);
-
-    await sendSms({
-      to:   resolvedPhone,
-      body: `Hi! You have a cleaning job at ${listing.name} on ${new Date(checkoutDate).toLocaleDateString()}. Open your task list here: ${link}`,
-    });
+    console.log('[JobToken] contractor link created for', listing.name);
 
     res.json({ message: 'SMS sent successfully' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('[send-link]', err.message);
+    res.status(500).json({ message: 'Something went wrong sending the link. Please try again.' });
   }
 });
 
@@ -272,6 +316,7 @@ router.post('/withdraw/:token', auth, async (req, res) => {
 // GET /api/jobs/token-status/:listingId/:checkoutDate — get active token for a checkout
 router.get('/token-status/:listingId/:checkoutDate', auth, async (req, res) => {
   try {
+    if (!(await listingRole(req.params.listingId, req.user.id)).member) return res.status(403).json({ message: 'Not authorised' });
     const checkoutStart = new Date(req.params.checkoutDate);
     checkoutStart.setHours(0, 0, 0, 0);
     const checkoutEnd = new Date(req.params.checkoutDate);

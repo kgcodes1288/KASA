@@ -225,7 +225,7 @@ function ContractorsSection() {
 
   const openEdit = (c) => {
     setEditingId(c.id);
-    setForm({ name: c.name, phone: c.phone, trade: c.trade || '', notes: c.notes || '', smsConsent: false });
+    setForm({ name: c.name, phone: c.phone, trade: c.trade || '', notes: c.notes || '', smsConsent: c.smsConsent === true });
     setFormError('');
     setShowForm(true);
   };
@@ -249,6 +249,7 @@ function ContractorsSection() {
           phone: form.phone,
           trade: form.trade,
           notes: form.notes,
+          smsConsent: form.smsConsent,
         });
       } else {
         await api.post('/contractors', {
@@ -359,8 +360,8 @@ function ContractorsSection() {
               </div>
             </div>
 
-            {/* SMS Consent — only shown when adding, not editing */}
-            {!editingId && (
+            {/* SMS consent: required to add, and can be turned on/off when editing */}
+            {true && (
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer',
                 padding: '10px 12px', borderRadius: 8, background: '#f0fdf4',
                 border: '1px solid #86efac', marginTop: 4 }}>
