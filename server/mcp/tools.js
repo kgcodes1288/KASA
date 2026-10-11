@@ -335,14 +335,14 @@ function registerTools(server, ctx) {
   def('send_contractor_link', {
     title: 'Text a contractor the job link',
     description: 'Text a saved vendor (or a raw phone number) a link to view and check off the cleaning for one checkout date. This sends a real SMS.',
-    input: { listingId, checkoutDate: z.string().describe('YYYY-MM-DD'), vendorId: z.string().optional(), phone: z.string().optional() },
+    input: { listingId, checkoutDate: z.string().describe('YYYY-MM-DD'), vendorId: z.string().optional(), phone: z.string().optional(), smsConsentConfirmed: z.boolean().optional().describe('Only with a raw phone number: true ONLY if the user told you this person agreed to receive texts. A saved vendor needs their consent flag set instead.') },
   }, {
     write: true,
     confirm: async ({ checkoutDate, vendorId, phone }) => {
       const v = vendorId ? (await api('GET', '/contractors')).find((c) => c.id === vendorId) : null;
       return `SEND AN SMS to ${v ? `${v.name} (${v.phone})` : phone} with the cleaning link for the ${checkoutDate} checkout.`;
     },
-  }, async ({ listingId: lid, checkoutDate, vendorId, phone }) => api('POST', '/jobs/send-link', { listingId: lid, checkoutDate, contractorId: vendorId, phone }));
+  }, async ({ listingId: lid, checkoutDate, vendorId, phone, smsConsentConfirmed }) => api('POST', '/jobs/send-link', { listingId: lid, checkoutDate, contractorId: vendorId, phone, consentConfirmed: smsConsentConfirmed === true }));
 
   def('invite_cohost', {
     title: 'Invite a co-host',

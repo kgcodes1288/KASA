@@ -1,5 +1,5 @@
 const prisma = require('../lib/prisma');
-const { InvalidGrantError, InvalidTokenError } = require('@modelcontextprotocol/sdk/server/auth/errors.js');
+const { InvalidGrantError, InvalidTokenError, InvalidClientMetadataError, InvalidRequestError } = require('@modelcontextprotocol/sdk/server/auth/errors.js');
 const { signReq, sha, rand } = require('./shared');
 
 const SCOPES = ['read', 'write'];
@@ -13,6 +13,16 @@ const clientsStore = {
     return row ? row.metadata : undefined;
   },
   async registerClient(client) {
+    // The app's name and redirect addresses are shown to people on the consent screen, so keep them tame
+    const loopback = (u) => ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+    const uris = client.redirect_uris || [];
+    if (uris.length > 5) throw new InvalidClientMetadataError('Too many redirect URIs');
+    for (const raw of uris) {
+      let u; try { u = new URL(String(raw)); } catch { throw new InvalidClientMetadataError('Invalid redirect URI'); }
+      if (String(raw).length > 500 || u.username || u.password) throw new InvalidClientMetadataError('Invalid redirect URI');
+      if (!(u.protocol === 'https:' || (u.protocol === 'http:' && loopback(u)))) throw new InvalidClientMetadataError('Redirect URIs must use https (http is only allowed for localhost)');
+    }
+    if (client.client_name) client = { ...client, client_name: String(client.client_name).replace(/\s+/g, ' ').trim().slice(0, 80) };
     await prisma.oAuthClient.create({ data: { clientId: client.client_id, metadata: client } });
     return client;
   },
@@ -29,6 +39,11 @@ const provider = {
   // Step 1: the chat app sends the user's browser here. Hand off to the CleanStay web app,
   // where the user is already signed in (email or Google) and approves the connection.
   async authorize(client, params, res) {
+    if (!params.codeChallenge) {            // OAuth 2.1: PKCE is mandatory; stop here instead of after the user has approved
+      const back = new URL(params.redirectUri); back.searchParams.set('error', 'invalid_request'); back.searchParams.set('error_description', 'code_challenge is required');
+      if (params.state) back.searchParams.set('state', params.state);
+      return res.redirect(302, back.toString());
+    }
     const scopes = normaliseScopes(params.scopes);
     const reqToken = signReq({
       cid: client.client_id,

@@ -53,6 +53,8 @@ app.get('/mcp', methodNotAllowed);
 app.delete('/mcp', methodNotAllowed);
 
 app.use((err, _req, res, _next) => {
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ error: 'invalid_request', error_description: 'Request too large' });
+  if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) return res.status(400).json({ error: 'invalid_request', error_description: 'Malformed JSON' });
   console.error('[mcp] error:', err);
   res.status(500).json({ error: 'server_error' });
 });
