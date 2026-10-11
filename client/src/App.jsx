@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import Navbar from './components/Navbar';
@@ -46,11 +47,28 @@ function Layout({ children }) {
   );
 }
 
+// Each page sets its own browser-tab title (also what screen readers announce on navigation)
+const TITLES = [
+  [/^\/login/, 'Sign in'], [/^\/register/, 'Create your account'], [/^\/forgot-password/, 'Reset your password'], [/^\/reset-password/, 'Choose a new password'],
+  [/^\/verify-email/, 'Verify your email'], [/^\/connect/, 'Connect an AI assistant'], [/^\/job\//, 'Your cleaning job'], [/^\/maintenance\//, 'Your task'],
+  [/^\/host/, 'My properties'], [/^\/listings\//, 'Property'], [/^\/jobs\//, 'Cleaning job'], [/^\/account/, 'My account'], [/^\/notifications/, 'Notifications'],
+  [/^\/accept-invite/, 'Co-host invitation'], [/^\/admin/, 'Admin'], [/^\/(privacy|compliance)/, 'Legal'],
+];
+function TitleSetter() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const hit = TITLES.find(([re]) => re.test(pathname));
+    document.title = hit ? `${hit[1]} · CleanStay` : 'CleanStay — Short-Term Rental Management for Hosts and Co-hosts';
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
       <BrowserRouter>
+        <TitleSetter />
         <Routes>
           <Route path="/login"            element={<Login />} />
           <Route path="/register"         element={<Register />} />

@@ -160,7 +160,7 @@ export default function ContractorJob() {
             })}
           </p>
           {data.listing?.address && (
-            <p style={{ fontSize: 13, color: '#94a3b8' }}>📍 {data.listing.address}</p>
+            <p style={{ fontSize: 13, color: '#64748b' }}>📍 {data.listing.address}</p>
           )}
 
           {/* Accept banner — shown until contractor accepts */}
@@ -272,7 +272,7 @@ export default function ContractorJob() {
                   />
                   <span style={{
                     fontSize: 14, flex: 1,
-                    color: item.completed ? '#94a3b8' : '#1e293b',
+                    color: item.completed ? '#64748b' : '#1e293b',
                     textDecoration: item.completed ? 'line-through' : 'none',
                   }}>
                     {item.text}
@@ -288,7 +288,7 @@ export default function ContractorJob() {
           </div>
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: 12, color: '#cbd5e1', marginTop: 24 }}>
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#64748b', marginTop: 24 }}>
           Powered by CleanStay
         </p>
       </div>
