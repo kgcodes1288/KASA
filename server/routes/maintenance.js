@@ -4,6 +4,8 @@ const authenticate = require('../middleware/auth');
 const { listingAccess } = require('../lib/access');
 const rl = require('../lib/rateLimit');
 
+const fmtMoney = (v) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? `$${n.toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}` : ''; };
+
 // ── input rules ───────────────────────────────────────────────────────────────
 const TASK_TYPES = ['MAINTENANCE', 'ACTION', 'PAYMENT_REQUEST', 'QUOTE'];
 const validDate = (v) => v && !Number.isNaN(new Date(v).getTime());
@@ -173,7 +175,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         isQuote ? 'QUOTE_REQUESTED' : 'TASK_ASSIGNED',
         isQuote ? 'Quote needs your approval' : 'Task assigned to you',
         isQuote
-          ? `${req.user.name} sent a quote for "${title}" ($${amt.value}) at ${task.listing.name}`
+          ? `${req.user.name} sent a quote for "${title}" (${fmtMoney(amt.value)}) at ${task.listing.name}`
           : `You've been assigned "${title}" at ${task.listing.name}`,
         req.params.id
       );
@@ -280,8 +282,9 @@ taskRouter.post('/:taskId/send', authenticate, async (req, res) => {
       task.listing.hostId,
       'TASK_ASSIGNED',
       'Invoice received',
-      `${req.user.name} sent an invoice for "${task.title.replace(/^Invoice: /, '')}" ($${String(task.paymentAmount).replace(/^\$/, '')}) at ${task.listing.name}`,
-      task.listingId
+      `${req.user.name} sent an invoice for "${task.title.replace(/^Invoice: /, '')}" (${fmtMoney(task.paymentAmount)}) at ${task.listing.name}`,
+      task.listingId,
+      { subject: 'An invoice is waiting for you', tab: 'overview' }
     );
     res.json(updated);
   } catch (err) {

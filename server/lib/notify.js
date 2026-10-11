@@ -18,7 +18,7 @@ const EMAIL_SUBJECT = {
 /**
  * Create a notification for a single user and send an email.
  */
-async function notify(userId, type, title, message, listingId = null) {
+async function notify(userId, type, title, message, listingId = null, opts = {}) {
   try {
     await prisma.notification.create({
       data: { userId, type, title, message, listingId },
@@ -32,11 +32,13 @@ async function notify(userId, type, title, message, listingId = null) {
   try {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
     if (user?.email && !user.emailUnsubscribed) {
-      const actionUrl = listingId ? `${APP_URL}/listings/${listingId}?tab=jobs` : `${APP_URL}/account`;
+      // quotes and invoices are answered on the overview; everything else lives under Jobs
+      const tab = opts.tab || (String(type).startsWith('QUOTE') ? 'overview' : 'jobs');
+      const actionUrl = listingId ? `${APP_URL}/listings/${listingId}?tab=${tab}` : `${APP_URL}/account`;
       await sendNotificationEmail({
         to:               user.email,
         toName:           user.name,
-        subject:          EMAIL_SUBJECT[type] || title,
+        subject:          opts.subject || EMAIL_SUBJECT[type] || title,
         title,
         message,
         actionUrl,

@@ -11,7 +11,7 @@ async function deliver(payload) {
 }
 
 const APP_URL = process.env.CLIENT_URL || 'https://getcleanstays.com';
-const API_URL = process.env.API_URL || process.env.RENDER_EXTERNAL_URL || 'https://kasa-workplanner.onrender.com';
+const API_URL = process.env.API_URL || 'https://api.getcleanstays.com';   // used for the one-click unsubscribe link in every email
 
 function unsubscribeFooter(token) {
   const url = `${API_URL}/api/unsubscribe?token=${token}`;
