@@ -108,7 +108,9 @@ function registerTools(server, ctx) {
     const shape = (l, role) => ({
       id: l.id, name: l.name, address: l.address, city: l.city, street: l.street,
       managementType: l.managementType, yourRole: role, owner: l.host?.name,
-      calendarConnected: !!l.icalUrl, lastSynced: l.lastSynced || undefined,
+      calendarConnected: (l.calendars?.length || 0) > 0 || !!l.icalUrl, calendars: (l.calendars || []).map((c) => ({ label: c.label, lastSynced: c.lastSynced || undefined, problem: c.lastError || undefined })),
+      possibleDoubleBookings: l.conflicts?.length ? l.conflicts.map((c) => `${c.a.label} ${String(c.a.checkin).slice(0, 10)}→${String(c.a.checkout).slice(0, 10)} overlaps ${c.b.label} ${String(c.b.checkin).slice(0, 10)}→${String(c.b.checkout).slice(0, 10)}`) : undefined,
+      lastSynced: l.lastSynced || undefined,
     });
     return [...own.map((l) => shape(l, 'owner')), ...shared.map((l) => shape(l, 'co-host'))];
   });
@@ -236,18 +238,18 @@ function registerTools(server, ctx) {
   def('create_property', {
     title: 'Add a property',
     description: 'Create a new property. managementType: SELF (owner manages it), COHOST (user is a co-host managing for an owner), HOST_WITH_COHOST (owner uses a co-host to manage).',
-    input: { name: z.string(), city: z.string(), street: z.string().optional(), managementType: z.enum(['SELF', 'COHOST', 'HOST_WITH_COHOST']), icalUrl: z.string().url().optional().describe('Airbnb calendar export URL') },
+    input: { name: z.string(), city: z.string(), street: z.string().optional(), managementType: z.enum(['SELF', 'COHOST', 'HOST_WITH_COHOST']), icalUrl: z.string().url().optional().describe('One calendar export URL (use calendars for several)'), calendars: z.array(z.object({ label: z.string().optional().describe('e.g. Airbnb, VRBO'), url: z.string().url() })).max(3).optional().describe('Up to 3 booking-site calendar links for the same property') },
   }, { write: true }, async (a) => api('POST', '/listings', a));
 
   def('update_property', {
     title: 'Edit a property',
-    description: 'Change a property\'s name, address, calendar link or management type.',
-    input: { listingId, name: z.string().optional(), city: z.string().optional(), street: z.string().optional(), managementType: z.enum(['SELF', 'COHOST', 'HOST_WITH_COHOST']).optional(), icalUrl: z.string().optional() },
+    description: 'Change a property\'s name, address, calendars or management type. calendars REPLACES the whole list of up to 3 booking-site calendar links (send all of them); calendars removed here also remove their bookings.',
+    input: { listingId, name: z.string().optional(), city: z.string().optional(), street: z.string().optional(), managementType: z.enum(['SELF', 'COHOST', 'HOST_WITH_COHOST']).optional(), icalUrl: z.string().optional(), calendars: z.array(z.object({ label: z.string().optional(), url: z.string().url() })).max(3).optional() },
   }, { write: true }, async ({ listingId: lid, ...rest }) => api('PUT', `/listings/${lid}`, rest));
 
   def('sync_calendar', {
-    title: 'Sync Airbnb calendar',
-    description: 'Pull the latest bookings from the property\'s Airbnb calendar link and create any new cleaning jobs.',
+    title: 'Sync booking calendars',
+    description: 'Pull the latest bookings from all of the property\'s calendar links (Airbnb, VRBO, ...), create new turnover cleaning jobs and remove jobs for cancelled stays. Reports per-calendar problems and possible double-bookings.',
     input: { listingId },
   }, { write: true }, async ({ listingId: lid }) => api('POST', `/listings/${lid}/sync`));
 

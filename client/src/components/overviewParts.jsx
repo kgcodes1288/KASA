@@ -70,6 +70,19 @@ export function Chip({ icon, children, bg = 'var(--bg)', fg = 'var(--ink-soft)' 
   );
 }
 
+// Possible double-bookings across a listing's calendars (from GET /listings/:id -> conflicts)
+export function ConflictAlert({ conflicts }) {
+  if (!conflicts?.length) return null;
+  const f = (d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return (
+    <div role="alert" style={{ margin: '0 0 14px', padding: '10px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, fontSize: 13, color: '#92400e' }}>
+      <strong>⚠️ Possible double-booking.</strong>{' '}
+      {conflicts.slice(0, 3).map((c, i) => <span key={i}>{i ? '; ' : ''}{c.a.label} {f(c.a.checkin)}–{f(c.a.checkout)} overlaps {c.b.label} {f(c.b.checkin)}–{f(c.b.checkout)}</span>)}.
+      {' '}Block those dates on one of the sites.
+    </div>
+  );
+}
+
 export function StatTile({ icon, label, value, hint, accent }) {
   return (
     <div style={{
