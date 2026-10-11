@@ -99,7 +99,11 @@ router.patch('/job/:token/checklist/:itemId', async (req, res) => {
       include: { job: true },
     });
     if (!item) return res.status(404).json({ message: 'Item not found' });
-    if (item.job.listingId !== jobToken.listingId) return res.status(403).json({ message: 'Not authorised' });
+    // the link only covers ITS checkout day of ITS property
+    const day0 = new Date(jobToken.checkoutDate); day0.setHours(0, 0, 0, 0);
+    const day1 = new Date(jobToken.checkoutDate); day1.setHours(23, 59, 59, 999);
+    if (item.job.listingId !== jobToken.listingId || item.job.checkoutDate < day0 || item.job.checkoutDate > day1)
+      return res.status(403).json({ message: 'Not authorised' });
 
     await prisma.jobChecklist.update({
       where: { id: req.params.itemId },

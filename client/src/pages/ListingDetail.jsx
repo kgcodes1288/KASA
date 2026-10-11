@@ -253,6 +253,7 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
   const [contractorId, setContractorId] = useState('');
   const [useManualPhone, setUseManualPhone] = useState(contractors.length === 0);
   const [manualPhone, setManualPhone]   = useState('');
+  const [consent, setConsent]           = useState(false);
   const [error, setError]               = useState('');
   const [sending, setSending]           = useState(false);
   const [sent, setSent]                 = useState(false);
@@ -260,11 +261,13 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
   const handleSend = async () => {
     if (!useManualPhone && !contractorId) { setError('Please select a contractor'); return; }
     if (useManualPhone && !manualPhone.trim()) { setError('Phone number is required'); return; }
+    if (useManualPhone && !consent) { setError('Please confirm this person agreed to receive texts'); return; }
     setSending(true); setError('');
     try {
       const payload = { listingId, checkoutDate };
       if (useManualPhone) {
         payload.phone = manualPhone.trim();
+        payload.consentConfirmed = true;
       } else {
         payload.contractorId = contractorId;
       }
@@ -339,11 +342,15 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
                   onChange={(e) => setManualPhone(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend(); } }}
                 />
+                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }} />
+                  <span>I confirm this person agreed to receive text messages from CleanStay about this job.</span>
+                </label>
                 {contractors.length > 0 && (
                   <button
                     style={{ background: 'none', border: 'none', fontSize: 12,
                       color: 'var(--primary)', cursor: 'pointer', marginTop: 8, padding: 0 }}
-                    onClick={() => { setUseManualPhone(false); setManualPhone(''); }}
+                    onClick={() => { setUseManualPhone(false); setManualPhone(''); setConsent(false); }}
                   >
                     ← Pick from saved contractors
                   </button>
@@ -352,7 +359,7 @@ function SendLinkModal({ listingId, checkoutDate, contractors, onClose, onSent }
             )}
 
             <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginBottom: 16 }}>
-              They'll receive an SMS with a link to view and check off all rooms for this checkout.
+              They'll receive a text with a link to the reset checklist for this checkout.
             </p>
 
             <div className="modal-footer">
