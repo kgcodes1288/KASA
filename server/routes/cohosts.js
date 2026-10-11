@@ -63,7 +63,7 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   }
 
   // Check if invitee already has an account
-  const invitee = await prisma.user.findUnique({ where: { email } });
+  const invitee = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
 
   const inviteToken = crypto.randomBytes(32).toString('hex');
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });

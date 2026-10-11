@@ -34,6 +34,8 @@ model User {
   notifications             Notification[]
   oauthCodes                OAuthCode[]
   oauthTokens               OAuthToken[]
+  tokenVersion       Int       @default(0)       // bumped on password change/reset: revokes old sessions
+  emailVerifyExpires DateTime?
 }
 
 enum Role {

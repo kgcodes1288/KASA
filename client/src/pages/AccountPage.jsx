@@ -1047,6 +1047,7 @@ export default function AccountPage() {
         currentPassword: passwords.currentPassword,
         newPassword:     passwords.newPassword,
       });
+      if (data.token) localStorage.setItem('token', data.token);   // this device stays signed in; other devices are signed out
       setPwMsg({ type: 'success', text: data.message });
       setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
@@ -1250,7 +1251,7 @@ export default function AccountPage() {
                   <input
                     id="newPassword" type="password" value={passwords.newPassword}
                     onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
-                    minLength={6} required
+                    minLength={8} required
                   />
                 </div>
                 <div className="form-group">

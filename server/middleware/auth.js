@@ -11,6 +11,7 @@ module.exports = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });
     if (!user) return res.status(401).json({ message: 'User not found' });
+    if (!decoded.mcp && (decoded.v ?? 0) !== (user.tokenVersion ?? 0)) return res.status(401).json({ message: 'Session expired. Please sign in again.' });
     req.user = user;
     next();
   } catch {
