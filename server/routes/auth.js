@@ -26,6 +26,7 @@ const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone,
   hasPassword: !!u.password,
   emailVerified: u.emailVerified,
+  emailNotifications: !u.emailUnsubscribed,
   isAdmin: !!(process.env.ADMIN_EMAIL && u.email.toLowerCase() === process.env.ADMIN_EMAIL.trim().toLowerCase()),
 });
 
@@ -282,6 +283,13 @@ router.put('/password', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// PUT /api/auth/email-preference — turn notification emails on/off (in-app notifications always stay on)
+router.put('/email-preference', auth, async (req, res) => {
+  if (typeof req.body.enabled !== 'boolean') return res.status(400).json({ message: 'enabled must be true or false' });
+  const updated = await prisma.user.update({ where: { id: req.user.id }, data: { emailUnsubscribed: !req.body.enabled } });
+  res.json(safeUser(updated));
 });
 
 // GET /api/auth/verify-email?token=xxx — no auth required

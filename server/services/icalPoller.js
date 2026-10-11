@@ -118,6 +118,14 @@ async function syncListing(listing) {
 }
 
 function startPoller() {
+  // nightly housekeeping: old notifications (older than 60 days) are deleted
+  cron.schedule('30 3 * * *', async () => {
+    try {
+      const cutoff = new Date(Date.now() - 60 * DAY);
+      const { count } = await prisma.notification.deleteMany({ where: { createdAt: { lt: cutoff } } });
+      if (count) console.log(`[cleanup] removed ${count} old notification(s)`);
+    } catch (err) { console.error('[cleanup]', err.message); }
+  });
   cron.schedule('0 */12 * * *', async () => {
     console.log('[iCal] Running 12-hour sync...');
     try {

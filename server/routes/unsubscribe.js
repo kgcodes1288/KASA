@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const prisma = require('../lib/prisma');
 
-// GET /api/unsubscribe?token=xxx  — no auth, one-click unsubscribe
-router.get('/', async (req, res) => {
+// GET /api/unsubscribe?token=xxx  — no auth, one-click unsubscribe (also POST, used by mail apps' built-in unsubscribe button)
+router.all('/', async (req, res) => {
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).end();
   const { token } = req.query;
   if (!token) return res.status(400).send(page('Invalid link', 'This unsubscribe link is invalid.'));
 
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
       await prisma.user.update({ where: { id: user.id }, data: { emailUnsubscribed: true } });
     }
 
-    res.send(page('Unsubscribed', `You've been unsubscribed from CleanStay email notifications. You won't receive any more emails from us.`));
+    res.send(page('Unsubscribed', `You've been unsubscribed from CleanStay email notifications. You won't receive any more emails from us. You can turn them back on any time in Account → Notifications.`));
   } catch (err) {
     console.error('[unsubscribe]', err.message);
     res.status(500).send(page('Error', 'Something went wrong. Please try again later.'));

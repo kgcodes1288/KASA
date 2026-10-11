@@ -27,6 +27,25 @@ function timeAgo(dateStr) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// Email on/off (in-app notifications always stay on)
+function EmailPreference() {
+  const [on, setOn] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { api.get('/auth/me').then(({ data }) => setOn(data.emailNotifications !== false)).catch(() => {}); }, []);
+  if (on === null) return null;
+  const toggle = async () => {
+    setSaving(true);
+    try { const { data } = await api.put('/auth/email-preference', { enabled: !on }); setOn(data.emailNotifications !== false); }
+    finally { setSaving(false); }
+  };
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', marginBottom: 14, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', fontSize: 14 }}>
+      <input type="checkbox" checked={on} disabled={saving} onChange={toggle} style={{ width: 18, height: 18, flexShrink: 0 }} />
+      <span><strong>Email me about new jobs, reminders, quotes and invoices</strong><br /><span style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>You'll still see everything here in the app.</span></span>
+    </label>
+  );
+}
+
 function NotificationsTab() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,14 +66,18 @@ function NotificationsTab() {
 
   if (notifications.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-ghost)', fontSize: 15 }}>
-        No notifications in the last 3 days
-      </div>
+      <>
+        <EmailPreference />
+        <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--ink-ghost)', fontSize: 15 }}>
+          No notifications in the last 14 days
+        </div>
+      </>
     );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <EmailPreference />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
         <button
           onClick={async () => {
