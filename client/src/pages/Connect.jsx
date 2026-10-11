@@ -48,8 +48,8 @@ export default function Connect() {
   };
 
   const shell = (children) => (
-    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16, background: 'var(--bg)' }}>
-      <div style={{ background: '#fff', borderRadius: 16, boxShadow: 'var(--shadow-lg)', padding: 28, maxWidth: 440, width: '100%' }}>{children}</div>
+    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', justifyItems: 'center', alignContent: 'center', padding: 16, background: 'var(--bg)' }}>
+      <div style={{ background: '#fff', borderRadius: 16, boxShadow: 'var(--shadow-lg)', padding: 28, maxWidth: 440, width: '100%', minWidth: 0, overflowWrap: 'anywhere' }}>{children}</div>
     </div>
   );
 
