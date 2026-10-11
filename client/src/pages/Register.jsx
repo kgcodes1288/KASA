@@ -75,18 +75,18 @@ export default function Register() {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Full name</label>
-            <input className="input" placeholder="Jane Smith" value={form.name}
+            <input className="input" placeholder="Jane Smith" maxLength={80} value={form.name}
               onChange={(e) => set('name', e.target.value)} required />
           </div>
           <div className="form-group">
             <label>Email</label>
-            <input className="input" type="email" placeholder="you@example.com" value={form.email}
+            <input className="input" type="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="you@example.com" value={form.email}
               onChange={(e) => set('email', e.target.value)} required />
           </div>
           <div className="form-group">
             <label>Password</label>
-            <input className="input" type="password" placeholder="At least 6 characters" value={form.password}
-              onChange={(e) => set('password', e.target.value)} required minLength={6} />
+            <input className="input" type="password" placeholder="At least 8 characters" value={form.password}
+              onChange={(e) => set('password', e.target.value)} required minLength={8} maxLength={128} />
           </div>
           <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} disabled={loading}>
             {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : 'Create account'}

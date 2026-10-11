@@ -9,7 +9,7 @@ class ApiError extends Error {
 // Calls the existing REST API as the connected user, so all existing permission
 // rules (owner vs co-host, hidden drafts, …) apply unchanged.
 async function callApi(userId, method, path, body) {
-  const token = jwt.sign({ id: userId }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '2m' });
+  const token = jwt.sign({ id: userId, mcp: 1 }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '2m' });
   const res = await fetch(`${API_BASE()}/api${path}`, {
     method,
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },

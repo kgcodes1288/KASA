@@ -5,17 +5,28 @@ const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const auth = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../lib/email');
+const { normalizeEmail, isValidEmail, passwordProblem, cleanName } = require('../lib/validate');
+const rl = require('../lib/rateLimit');
+
+const VERIFY_HOURS = 24;
+const verifyExpiry = () => new Date(Date.now() + VERIFY_HOURS * 3600 * 1000);
+// case-insensitive account lookup (older accounts may have capitals in the stored address)
+const findByEmail = (email) => prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
-const signToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
+// session token carries the user's tokenVersion: bumping it (password change/reset) signs every other session out
+const signToken = (userOrId, version = 0) => {
+  const id = typeof userOrId === 'object' ? userOrId.id : userOrId;
+  const v = typeof userOrId === 'object' ? (userOrId.tokenVersion || 0) : version;
+  return jwt.sign({ id, v }, process.env.JWT_SECRET || 'dev_secret', { expiresIn: '7d' });
+};
 
 const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone,
   hasPassword: !!u.password,
   emailVerified: u.emailVerified,
-  isAdmin: !!(process.env.ADMIN_EMAIL && u.email === process.env.ADMIN_EMAIL),
+  isAdmin: !!(process.env.ADMIN_EMAIL && u.email.toLowerCase() === process.env.ADMIN_EMAIL.trim().toLowerCase()),
 });
 
 // Strip to 10 digits (removes +1 country code)
@@ -28,14 +39,20 @@ const normalizePhone = (phone) => {
 
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', rl.limit({ name: 'register', windowMs: 60 * 60 * 1000, max: 10, message: 'Too many sign-ups from this network.' }), async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name: rawName, password, phone } = req.body;
+    const email = normalizeEmail(req.body.email);
     const role = 'host';
-    if (!name || !email || !password)
+    if (!rawName || !email || !password)
       return res.status(400).json({ message: 'name, email, password are required' });
+    const { name, error: nameErr } = cleanName(rawName);
+    if (nameErr) return res.status(400).json({ message: nameErr });
+    if (!isValidEmail(email)) return res.status(400).json({ message: 'Please enter a valid email address' });
+    const pwErr = passwordProblem(password, email);
+    if (pwErr) return res.status(400).json({ message: pwErr });
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const existing = await findByEmail(email);
     if (existing) return res.status(400).json({ message: 'Email already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
@@ -46,23 +63,24 @@ router.post('/register', async (req, res) => {
         phone: normalizePhone(phone) || null,
         emailVerified: false,
         emailVerifyToken,
+        emailVerifyExpires: verifyExpiry(),
       },
     });
 
     // Auto-link any pending co-host invites matching this email
     await prisma.listingCoHost.updateMany({
-      where: { inviteEmail: email.toLowerCase(), status: 'PENDING', userId: null },
+      where: { inviteEmail: email, status: 'PENDING', userId: null },
       data: { userId: user.id },
     });
 
-    // Send verification email (non-blocking)
+    // Send verification email (non-blocking; failures are logged by the mailer)
     sendVerificationEmail({
       to: user.email,
       name: user.name,
       verifyUrl: `${CLIENT_URL}/verify-email?token=${emailVerifyToken}`,
     }).catch(() => {});
 
-    res.status(201).json({ token: signToken(user.id), user: safeUser(user) });
+    res.status(201).json({ token: signToken(user), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -71,16 +89,25 @@ router.post('/register', async (req, res) => {
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password required' });
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    // brute-force guard: 10 failures per account+network, 60 per network, per 15 minutes. A successful sign-in clears the account counter.
+    const WIN = 15 * 60 * 1000;
+    const kAcct = `login-fail|${req.ip}|${email}`, kIp = `login-fail-ip|${req.ip}`;
+    const bA = rl.peek(kAcct), bI = rl.peek(kIp);
+    if ((bA && bA.n >= 10) || (bI && bI.n >= 60))
+      return rl.retry(res, bA && bA.n >= 10 ? bA : bI, 'Too many failed sign-in attempts.');
+    const fail = (msg, status = 401) => { rl.hit(kAcct, WIN); rl.hit(kIp, WIN); return res.status(status).json({ message: msg }); };
+    const user = await findByEmail(email);
+    if (!user) return fail('Invalid credentials');
     if (!user.password)
       return res.status(401).json({ message: 'This account uses Google sign-in. Please use "Continue with Google".' });
-    if (!(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ message: 'Invalid credentials' });
-    res.json({ token: signToken(user.id), user: safeUser(user) });
+    if (!(await bcrypt.compare(String(password), user.password)))
+      return fail('Invalid credentials');
+    rl.clear(kAcct);
+    res.json({ token: signToken(user), user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -134,7 +161,7 @@ router.get('/google/callback', async (req, res) => {
 
     // Find existing user by Google ID or email
     let user = await prisma.user.findFirst({
-      where: { OR: [{ googleId: profile.id }, { email: profile.email }] },
+      where: { OR: [{ googleId: profile.id }, { email: { equals: profile.email, mode: 'insensitive' } }] },
     });
 
     if (user) {
@@ -154,7 +181,7 @@ router.get('/google/callback', async (req, res) => {
       user = await prisma.user.create({
         data: {
           name: profile.name || profile.email.split('@')[0],
-          email: profile.email,
+          email: normalizeEmail(profile.email),
           googleId: profile.id,
           role: 'host',
           emailVerified: true,
@@ -168,7 +195,7 @@ router.get('/google/callback', async (req, res) => {
       data: { userId: user.id },
     });
 
-    const token = signToken(user.id);
+    const token = signToken(user);
     res.redirect(`${clientUrl}/auth/callback?token=${token}`);
   } catch (err) {
     console.error('Google OAuth error:', err);
@@ -184,11 +211,15 @@ router.get('/me', auth, (req, res) => {
 // PUT /api/auth/profile
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { name, email, phone, currentPassword } = req.body;
-    if (!name || !email)
-      return res.status(400).json({ message: 'Name and email are required' });
+    const { phone, currentPassword } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const cn = cleanName(req.body.name);
+    if (cn.error || !email)
+      return res.status(400).json({ message: cn.error || 'Name and email are required' });
+    const name = cn.name;
+    if (!isValidEmail(email)) return res.status(400).json({ message: 'Please enter a valid email address' });
 
-    const emailChanging = email.toLowerCase() !== req.user.email.toLowerCase();
+    const emailChanging = email !== req.user.email.toLowerCase();
 
     if (emailChanging) {
       // Require password confirmation for password-based accounts
@@ -199,8 +230,8 @@ router.put('/profile', auth, async (req, res) => {
         if (!ok)
           return res.status(401).json({ message: 'Incorrect password' });
       }
-      const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-      if (existing) return res.status(400).json({ message: 'Email already in use' });
+      const existing = await findByEmail(email);
+      if (existing && existing.id !== req.user.id) return res.status(400).json({ message: 'Email already in use' });
     }
 
     // If email is changing, reset verification and send a new link
@@ -209,6 +240,7 @@ router.put('/profile', auth, async (req, res) => {
       const verifyToken = crypto.randomBytes(32).toString('hex');
       extraData.emailVerified = false;
       extraData.emailVerifyToken = verifyToken;
+      extraData.emailVerifyExpires = verifyExpiry();
       // Non-blocking
       const updatedName = name || req.user.name;
       sendVerificationEmail({
@@ -234,19 +266,19 @@ router.put('/password', auth, async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword)
       return res.status(400).json({ message: 'Both fields are required' });
-    if (newPassword.length < 6)
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    const pwErr = passwordProblem(newPassword, req.user.email);
+    if (pwErr) return res.status(400).json({ message: pwErr });
     if (!req.user.password)
       return res.status(400).json({ message: 'This account uses Google sign-in and has no password to change.' });
     const isMatch = await bcrypt.compare(currentPassword, req.user.password);
     if (!isMatch)
       return res.status(401).json({ message: 'Current password is incorrect' });
     const hashed = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { password: hashed },
+      data: { password: hashed, tokenVersion: { increment: 1 } },    // every other session is signed out
     });
-    res.json({ message: 'Password updated successfully' });
+    res.json({ message: 'Password updated successfully. Other devices have been signed out.', token: signToken(updated) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -257,11 +289,12 @@ router.get('/verify-email', async (req, res) => {
   try {
     const { token } = req.query;
     if (!token) return res.status(400).json({ message: 'Token required' });
-    const user = await prisma.user.findFirst({ where: { emailVerifyToken: token } });
-    if (!user) return res.status(400).json({ message: 'Invalid or expired verification link' });
+    const user = await prisma.user.findFirst({ where: { emailVerifyToken: String(token) } });
+    if (!user || (user.emailVerifyExpires && user.emailVerifyExpires < new Date()))
+      return res.status(400).json({ message: 'Invalid or expired verification link' });
     await prisma.user.update({
       where: { id: user.id },
-      data: { emailVerified: true, emailVerifyToken: null },
+      data: { emailVerified: true, emailVerifyToken: null, emailVerifyExpires: null },
     });
     res.json({ message: 'Email verified successfully' });
   } catch (err) {
@@ -270,14 +303,14 @@ router.get('/verify-email', async (req, res) => {
 });
 
 // POST /api/auth/resend-verification — auth required
-router.post('/resend-verification', auth, async (req, res) => {
+router.post('/resend-verification', auth, rl.limit({ name: 'resend-verify', windowMs: 60 * 60 * 1000, max: 5, key: (req) => req.ip, message: 'Too many verification emails requested.' }), async (req, res) => {
   try {
     if (req.user.emailVerified)
       return res.json({ message: 'Your email is already verified' });
     const token = crypto.randomBytes(32).toString('hex');
     await prisma.user.update({
       where: { id: req.user.id },
-      data: { emailVerifyToken: token },
+      data: { emailVerifyToken: token, emailVerifyExpires: verifyExpiry() },
     });
     await sendVerificationEmail({
       to: req.user.email,
@@ -291,11 +324,14 @@ router.post('/resend-verification', auth, async (req, res) => {
 });
 
 // POST /api/auth/forgot-password — no auth required
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', rl.limit({ name: 'forgot-ip', windowMs: 60 * 60 * 1000, max: 20, message: 'Too many reset requests from this network.' }), async (req, res) => {
   try {
-    const { email } = req.body;
+    const email = normalizeEmail(req.body.email);
     if (!email) return res.status(400).json({ message: 'Email is required' });
-    const user = await prisma.user.findUnique({ where: { email } });
+    // at most 3 reset emails per address per hour (answers the same either way, so nothing is revealed)
+    if (rl.hit(`forgot-email|${email}`, 60 * 60 * 1000).n > 3)
+      return res.json({ message: 'If that email has an account, a reset link has been sent.' });
+    const user = await findByEmail(email);
     // Always respond the same way to prevent email enumeration
     if (!user || !user.password) {
       return res.json({ message: 'If that email has an account, a reset link has been sent.' });
@@ -318,22 +354,22 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // POST /api/auth/reset-password — no auth required
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', rl.limit({ name: 'reset', windowMs: 60 * 60 * 1000, max: 20, message: 'Too many attempts.' }), async (req, res) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword)
       return res.status(400).json({ message: 'Token and new password are required' });
-    if (newPassword.length < 6)
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
     const user = await prisma.user.findFirst({
-      where: { passwordResetToken: token, passwordResetExpires: { gt: new Date() } },
+      where: { passwordResetToken: String(token), passwordResetExpires: { gt: new Date() } },
     });
     if (!user)
       return res.status(400).json({ message: 'Reset link is invalid or has expired' });
+    const pwErr = passwordProblem(newPassword, user.email);
+    if (pwErr) return res.status(400).json({ message: pwErr });
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed, passwordResetToken: null, passwordResetExpires: null },
+      data: { password: hashed, passwordResetToken: null, passwordResetExpires: null, tokenVersion: { increment: 1 } },   // signs out every old session
     });
     res.json({ message: 'Password reset successfully. You can now sign in.' });
   } catch (err) {

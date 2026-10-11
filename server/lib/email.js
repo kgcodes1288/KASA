@@ -3,6 +3,13 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 const FROM   = process.env.RESEND_FROM || 'noreply@getcleanstays.com';
 
+// Resend reports failures in the result ({ error }) instead of throwing: surface them so a rejected address is never logged as sent
+async function deliver(payload) {
+  const result = await resend.emails.send(payload);
+  if (result && result.error) throw new Error(`${result.error.name || 'send_failed'}: ${result.error.message}`);
+  return result;
+}
+
 const APP_URL = process.env.CLIENT_URL || 'https://getcleanstays.com';
 const API_URL = process.env.API_URL || process.env.RENDER_EXTERNAL_URL || 'https://kasa-workplanner.onrender.com';
 
@@ -66,7 +73,7 @@ async function sendNotificationEmail({ to, toName, subject, title, message, acti
 </html>`;
 
   try {
-    await resend.emails.send({
+    await deliver({
       from: FROM,
       to:   [to],
       subject,
@@ -124,7 +131,7 @@ async function sendDirectEmail({ fromName, fromEmail, toName, toEmail, subject, 
 </body>
 </html>`;
 
-  const result = await resend.emails.send({
+  const result = await deliver({
     from:       FROM,
     to:         [toEmail],
     reply_to:   fromEmail,
@@ -188,7 +195,7 @@ async function sendInviteEmail({ toEmail, fromName, listingName, role, inviteUrl
 </html>`;
 
   console.log(`[email] Sending invite to ${toEmail} from=${FROM}`);
-  const result = await resend.emails.send({
+  const result = await deliver({
     from: FROM,
     to: [toEmail],
     subject: `${fromName} invited you to co-host "${listingName}" on CleanStay`,
@@ -260,7 +267,7 @@ async function sendCleaningDigestEmail({ toEmail, toName, listingName, listingId
   </table>
 </body></html>`;
 
-  const result = await resend.emails.send({
+  const result = await deliver({
     from: FROM,
     to: [toEmail],
     subject: `${jobs.length} new cleaning job${jobs.length !== 1 ? 's' : ''} added — ${listingName}`,
@@ -313,7 +320,7 @@ async function sendCleaningReminderEmail({ toEmail, toName, listingName, listing
   </table>
 </body></html>`;
 
-  const result = await resend.emails.send({
+  const result = await deliver({
     from: FROM,
     to: [toEmail],
     subject: `🔔 Cleaning reminder today — ${listingName}`,
@@ -362,7 +369,7 @@ async function sendVerificationEmail({ to, name, verifyUrl }) {
 </body></html>`;
 
   try {
-    await resend.emails.send({ from: FROM, to: [to], subject: 'Verify your CleanStay email address', html });
+    await deliver({ from: FROM, to: [to], subject: 'Verify your CleanStay email address', html });
     console.log(`[email] Verification email sent to ${to}`);
   } catch (err) {
     console.error(`[email] Failed to send verification to ${to}:`, err.message);
@@ -407,7 +414,7 @@ async function sendPasswordResetEmail({ to, name, resetUrl }) {
 </body></html>`;
 
   try {
-    await resend.emails.send({ from: FROM, to: [to], subject: 'Reset your CleanStay password', html });
+    await deliver({ from: FROM, to: [to], subject: 'Reset your CleanStay password', html });
     console.log(`[email] Password reset email sent to ${to}`);
   } catch (err) {
     console.error(`[email] Failed to send password reset to ${to}:`, err.message);

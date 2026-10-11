@@ -93,7 +93,7 @@ export default function Login() {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Email</label>
-            <input className="input" type="email" placeholder="you@example.com" value={form.email}
+            <input className="input" type="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="you@example.com" value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </div>
           <div className="form-group">
