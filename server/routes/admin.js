@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 // Admin-only middleware
 const adminOnly = (req, res, next) => {
   const adminEmail = process.env.ADMIN_EMAIL;
-  if (!adminEmail || req.user.email !== adminEmail) {
+  if (!adminEmail || req.user.email.toLowerCase() !== adminEmail.trim().toLowerCase() || !req.user.emailVerified) {
     return res.status(403).json({ message: 'Admin access required' });
   }
   next();
