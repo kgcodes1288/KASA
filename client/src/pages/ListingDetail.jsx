@@ -380,16 +380,20 @@ function AssignMaintenanceModal({ task, listingId, coHosts, contractors, current
   const [assignType, setAssignType]   = useState('contractor');
   const [userId, setUserId]           = useState('');
   const [phone, setPhone]             = useState('');
+  const [consent, setConsent]         = useState(false);
   const [sending, setSending]         = useState(false);
   const [sent, setSent]               = useState(false);
   const [error, setError]             = useState('');
+  const savedMatch = phone.replace(/\D/g, '').length >= 10 && contractors.find((c) => c.phone.replace(/\D/g, '').slice(-10) === phone.replace(/\D/g, '').slice(-10));   // a saved vendor already gave consent
 
   const handleAssign = async () => {
     if (assignType === 'cohost' && !userId) { setError('Please select a co-host'); return; }
     if (assignType === 'contractor' && !phone.trim()) { setError('Phone number is required'); return; }
+    if (assignType === 'contractor' && !savedMatch && !consent) { setError('Please confirm this person agreed to receive texts'); return; }
     setSending(true); setError('');
     try {
       await api.post(`/maintenance/${task.id}/assign`, {
+        consentConfirmed: assignType === 'contractor' ? (savedMatch ? undefined : true) : undefined,
         type:   assignType,
         userId: assignType === 'cohost' ? userId : undefined,
         phone:  assignType === 'contractor' ? phone.trim() : undefined,
@@ -463,6 +467,12 @@ function AssignMaintenanceModal({ task, listingId, coHosts, contractors, current
                 )}
                 <input className="input" placeholder="Or enter a phone number"
                   value={phone} onChange={(e) => setPhone(e.target.value)} />
+                {phone.trim() && !savedMatch && (
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 10, fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }} />
+                    <span>I confirm this person agreed to receive text messages from CleanStay about this task.</span>
+                  </label>
+                )}
               </div>
             )}
 

@@ -5,6 +5,8 @@ const crypto = require('crypto');
 
 const { notify } = require('../lib/notify');
 const { sendInviteEmail } = require('../lib/email');
+const { isValidEmail } = require('../lib/validate');
+const rl = require('../lib/rateLimit');
 
 const router = express.Router();
 
@@ -39,6 +41,9 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   if (!['COHOST', 'VIEW_ONLY'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role.' });
   }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
 
   const listingRole = await getListingRole(listingId, requesterId);
   if (listingRole !== 'OWNER') {
@@ -48,6 +53,11 @@ router.post('/:id/cohosts/invite', authenticate2, async (req, res) => {
   if (email === req.user.email?.toLowerCase()) {
     return res.status(400).json({ error: 'You cannot invite yourself.' });
   }
+  // abuse limits: 20 invite emails per owner per day, 10 team members per property
+  if (rl.hit(`invite|${requesterId}`, 24 * 60 * 60 * 1000).n > 20)
+    return res.status(429).json({ error: 'You have sent a lot of invites today. Please try again tomorrow.' });
+  if ((await prisma.listingCoHost.count({ where: { listingId, status: { in: ['PENDING', 'ACCEPTED'] } } })) >= 10)
+    return res.status(400).json({ error: 'A property can have up to 10 co-hosts.' });
 
   // Check if already invited/accepted
   const existing = await prisma.listingCoHost.findFirst({

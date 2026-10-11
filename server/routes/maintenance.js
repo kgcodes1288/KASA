@@ -1,6 +1,31 @@
 const { Router } = require('express');
 const prisma = require('../lib/prisma');
 const authenticate = require('../middleware/auth');
+const { listingAccess } = require('../lib/access');
+const rl = require('../lib/rateLimit');
+
+// ── input rules ───────────────────────────────────────────────────────────────
+const TASK_TYPES = ['MAINTENANCE', 'ACTION', 'PAYMENT_REQUEST', 'QUOTE'];
+const validDate = (v) => v && !Number.isNaN(new Date(v).getTime());
+// money as typed ("$1,200.50") -> "1200.50"; null when it is not a sensible amount
+function cleanAmount(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return { value: null };
+  const t = String(v).replace(/[$,\s]/g, '');
+  if (!/^\d{1,7}(\.\d{1,2})?$/.test(t) || !(parseFloat(t) > 0)) return { error: 'Enter a valid amount, like 150 or 1200.50 (up to 9,999,999.99)' };
+  return { value: t };
+}
+function cleanAttachments(a) {
+  if (a === undefined) return { value: [] };
+  if (!Array.isArray(a) || a.length > 5) return { error: 'You can attach up to 5 files' };
+  if (!a.every((u) => typeof u === 'string' && u.length <= 500 && /^https:\/\//i.test(u))) return { error: 'Attachments must be uploaded files' };
+  return { value: a };
+}
+const toUs10 = (phone) => { const d = String(phone || '').replace(/\D/g, ''); return d.length === 10 ? d : d.length === 11 && d.startsWith('1') ? d.slice(1) : null; };
+// the person must be on the listing's team and able to act (owner or full co-host)
+async function isActingMember(listingId, userId) {
+  const a = await listingAccess(listingId, userId);
+  return a.canWrite;
+}
 const { notify } = require('../lib/notify');
 const crypto = require('crypto');
 const { sendSms } = require('../lib/sendSms');
@@ -34,8 +59,8 @@ const listingRouter = Router({ mergeParams: true });
 // GET /api/listings/:id/maintenance — returns rooms with nested checklistItems + maintenanceTasks, plus general tasks
 listingRouter.get('/:id/maintenance', authenticate, async (req, res) => {
   try {
-    const { found } = await getAccess(req.params.id, req.user.id);
-    if (!found) return res.status(404).json({ message: 'Listing not found' });
+    const access = await listingAccess(req.params.id, req.user.id);
+    if (!access.listing || !access.canRead) return res.status(404).json({ message: 'Listing not found' });
 
     // Drafts are only visible to the person who created them
     const visible = { OR: [{ isDraft: false }, { assignedByUserId: req.user.id }] };
@@ -89,14 +114,25 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
 
     const { title, notes, intervalMonths, lastServicedAt, nextDueAt, roomId, assignedUserId, taskType, isRecurring, paymentAmount, attachments } = req.body;
-    if (!title || !nextDueAt)
+    if (!title || !String(title).trim() || !nextDueAt)
       return res.status(400).json({ message: 'title and nextDueAt are required' });
+    if (String(title).trim().length > 120) return res.status(400).json({ message: 'Title must be 120 characters or fewer' });
+    if (notes && String(notes).length > 1000) return res.status(400).json({ message: 'Notes must be 1,000 characters or fewer' });
+    if (!validDate(nextDueAt) || (lastServicedAt && !validDate(lastServicedAt))) return res.status(400).json({ message: 'That date is not valid' });
+    if (taskType !== undefined && !TASK_TYPES.includes(taskType)) return res.status(400).json({ message: 'Unknown task type' });
+    const amt = cleanAmount(paymentAmount);
+    if (amt.error) return res.status(400).json({ message: amt.error });
+    const att = cleanAttachments(attachments);
+    if (att.error) return res.status(400).json({ message: att.error });
+    if (assignedUserId && !(await isActingMember(req.params.id, assignedUserId)) && assignedUserId !== (await prisma.listing.findUnique({ where: { id: req.params.id }, select: { hostId: true } }))?.hostId)
+      return res.status(400).json({ message: "That person isn't on this property's team" });
+    if (roomId && !(await prisma.room.findFirst({ where: { id: roomId, listingId: req.params.id }, select: { id: true } })))
+      return res.status(400).json({ message: 'That room is not part of this property' });
 
     const isQuote = taskType === 'QUOTE';
     if (isQuote) {
       const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
-      if (!paymentAmount || !String(paymentAmount).trim())
-        return res.status(400).json({ message: 'A quote needs an amount' });
+      if (!amt.value) return res.status(400).json({ message: 'A quote needs an amount' });
       if (assignedUserId !== listing.hostId)
         return res.status(400).json({ message: 'Quotes are sent to the listing owner for approval' });
       if (req.user.id === listing.hostId)
@@ -104,19 +140,19 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
     }
 
     const recurring = !isQuote && isRecurring !== false;
-    if (recurring && !intervalMonths)
-      return res.status(400).json({ message: 'intervalMonths is required for recurring tasks' });
+    if (recurring && !(Number.isInteger(Number(intervalMonths)) && Number(intervalMonths) >= 1 && Number(intervalMonths) <= 120))
+      return res.status(400).json({ message: 'Repeat interval must be between 1 and 120 months' });
 
     const task = await prisma.maintenanceTask.create({
       data: {
-        title,
-        notes: notes || null,
+        title: String(title).trim(),
+        notes: notes ? String(notes).trim() : null,
         intervalMonths: recurring ? parseInt(intervalMonths) : 0,
         isRecurring: recurring,
         taskType: taskType || 'MAINTENANCE',
-        paymentAmount: paymentAmount || null,
+        paymentAmount: amt.value,
         ...(isQuote && { quoteStatus: 'PENDING' }),
-        attachments: Array.isArray(attachments) ? attachments : [],
+        attachments: att.value,
         lastServicedAt: lastServicedAt ? new Date(lastServicedAt) : null,
         nextDueAt: new Date(nextDueAt),
         listingId: req.params.id,
@@ -137,7 +173,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         isQuote ? 'QUOTE_REQUESTED' : 'TASK_ASSIGNED',
         isQuote ? 'Quote needs your approval' : 'Task assigned to you',
         isQuote
-          ? `${req.user.name} sent a quote for "${title}" ($${String(paymentAmount).replace(/^\$/, '')}) at ${task.listing.name}`
+          ? `${req.user.name} sent a quote for "${title}" ($${amt.value}) at ${task.listing.name}`
           : `You've been assigned "${title}" at ${task.listing.name}`,
         req.params.id
       );
@@ -204,13 +240,18 @@ taskRouter.put('/:taskId/draft', authenticate, async (req, res) => {
     const task = await loadOwnDraft(req, res);
     if (!task) return;
     const { title, notes, paymentAmount, nextDueAt, attachments } = req.body;
-    if (title !== undefined && !title.trim()) return res.status(400).json({ message: 'Title is required' });
+    if (title !== undefined && (!String(title).trim() || String(title).trim().length > 120)) return res.status(400).json({ message: 'Title must be 1–120 characters' });
+    if (notes && String(notes).length > 1000) return res.status(400).json({ message: 'Notes must be 1,000 characters or fewer' });
+    if (nextDueAt && !validDate(nextDueAt)) return res.status(400).json({ message: 'That date is not valid' });
+    const amt = paymentAmount !== undefined ? cleanAmount(paymentAmount) : { value: undefined };
+    if (amt.error) return res.status(400).json({ message: amt.error });
+    if (attachments !== undefined) { const att = cleanAttachments(attachments); if (att.error) return res.status(400).json({ message: att.error }); }
     const updated = await prisma.maintenanceTask.update({
       where: { id: task.id },
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(notes !== undefined && { notes: notes?.trim() || null }),
-        ...(paymentAmount !== undefined && { paymentAmount: String(paymentAmount).trim() || null }),
+        ...(paymentAmount !== undefined && { paymentAmount: amt.value }),
         ...(nextDueAt && { nextDueAt: new Date(nextDueAt) }),
         ...(Array.isArray(attachments) && { attachments }),
       },
@@ -263,6 +304,7 @@ taskRouter.post('/:taskId/decision', authenticate, async (req, res) => {
       return res.status(409).json({ message: `This quote was already ${task.quoteStatus.toLowerCase()}` });
 
     const { decision, note } = req.body;
+    if (note && String(note).length > 500) return res.status(400).json({ message: 'Note must be 500 characters or fewer' });
     if (!['APPROVED', 'DECLINED'].includes(decision))
       return res.status(400).json({ message: 'decision must be APPROVED or DECLINED' });
 
@@ -332,6 +374,8 @@ taskRouter.post('/:taskId/assign', authenticate, async (req, res) => {
 
     if (type === 'cohost') {
       if (!userId) return res.status(400).json({ message: 'userId is required for cohost assignment' });
+      if (!(await isActingMember(task.listingId, userId)))
+        return res.status(400).json({ message: "That person isn't on this property's team (or has view-only access)" });
 
       const updated = await prisma.maintenanceTask.update({
         where: { id: req.params.taskId },
@@ -355,34 +399,46 @@ taskRouter.post('/:taskId/assign', authenticate, async (req, res) => {
 
     if (type === 'contractor') {
       if (!phone) return res.status(400).json({ message: 'phone is required for contractor assignment' });
+      const ten = toUs10(phone);
+      if (!ten) return res.status(400).json({ message: 'That phone number does not look right. Use a 10-digit US number.' });
+      const e164 = `+1${ten}`;
 
-      const digits = phone.replace(/\D/g, '');
-      const e164 = digits.startsWith('1') ? `+${digits}` : `+1${digits}`;
+      // texting needs the person's agreement: a saved vendor with consent, or an explicit confirmation
+      const vendors = await prisma.contractor.findMany({ where: { hostId: { in: [req.user.id, task.listing.hostId] } } });
+      const saved = vendors.find((v) => toUs10(v.phone) === ten);
+      if (saved && !saved.smsConsent)
+        return res.status(400).json({ message: `${saved.name} hasn't agreed to receive texts. Open Account → Contractors and tick the consent box once they agree.` });
+      if (!saved && req.body.consentConfirmed !== true)
+        return res.status(400).json({ message: 'Please confirm this person has agreed to receive text messages from CleanStay.' });
+
+      const userBucket = rl.hit(`sms-user|${req.user.id}`, 60 * 60 * 1000);
+      if (userBucket.n > 30) return rl.retry(res, userBucket, "You've sent a lot of texts.");
+      const phoneBucket = rl.hit(`sms-phone|${e164}`, 24 * 60 * 60 * 1000);
+      if (phoneBucket.n > 5) return rl.retry(res, phoneBucket, 'This number has already received several texts today.');
 
       const token = crypto.randomBytes(20).toString('hex');
       const expiresAt = addMonths(new Date(task.nextDueAt), 1);
-
-      await prisma.maintenanceToken.create({
-        data: { token, phone: e164, expiresAt, taskId: task.id },
-      });
-
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const clientUrl = process.env.CLIENT_URL || 'https://getcleanstays.com';
       const link = `${clientUrl}/maintenance/${token}`;
 
-      console.log(`[MaintenanceToken] Contractor link: ${link}`);
-
-      await sendSms({
-        to: e164,
-        body: `Hi! You've been assigned a maintenance task "${task.title}" at ${task.listing.name}. Due: ${new Date(task.nextDueAt).toLocaleDateString()}. View details here: ${link}`,
-      });
-
+      // text first: if it can't be sent, nothing is recorded
+      try {
+        await sendSms({
+          to: e164,
+          body: `Hi! You've been assigned a maintenance task "${task.title}" at ${task.listing.name}. Due: ${new Date(task.nextDueAt).toLocaleDateString('en-US', { timeZone: 'UTC' })}. View details here: ${link}`,
+        });
+      } catch (smsErr) {
+        console.error('[assign maintenance] SMS failed:', smsErr.message);
+        return res.status(502).json({ message: "We couldn't send that text. Check the phone number and try again." });
+      }
+      await prisma.maintenanceToken.create({ data: { token, phone: e164, expiresAt, taskId: task.id } });
       return res.json({ message: 'SMS sent to contractor' });
     }
 
     return res.status(400).json({ message: 'type must be cohost or contractor' });
   } catch (err) {
     console.error('[assign maintenance]', err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Something went wrong. Please try again.' });
   }
 });
 

@@ -3,20 +3,17 @@ const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { syncListing } = require('../services/icalPoller');
 const { getResetItems } = require('../lib/turnover');
+const { listingAccess } = require('../lib/access');
 const { normalizeCalendars, reconcileCalendars, findConflicts, calendarSelect } = require('../lib/calendars');
 
 const withCalendars = async (listing) => ({ ...listing, calendars: await prisma.listingCalendar.findMany({ where: { listingId: listing.id }, select: calendarSelect, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] }), conflicts: await findConflicts(listing.id) });
 const bookingSelect = { id: true, checkinDate: true, checkoutDate: true, guestName: true, type: true, calendarId: true };
 
 // Helper: check if user is owner or accepted co-host of a listing
+// ok = may READ; canWrite = owner or full co-host (view-only co-hosts cannot change anything)
 async function hasAccess(listingId, userId) {
-  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-  if (!listing) return { listing: null, ok: false, isOwner: false };
-  if (listing.hostId === userId) return { listing, ok: true, isOwner: true };
-  const coHost = await prisma.listingCoHost.findFirst({
-    where: { listingId, userId, status: 'ACCEPTED' },
-  });
-  return { listing, ok: !!coHost, isOwner: false };
+  const a = await listingAccess(listingId, userId);
+  return { listing: a.listing, ok: a.canRead, canWrite: a.canWrite, isOwner: a.isOwner };
 }
 
 // length limits shared by create/edit
@@ -86,11 +83,12 @@ router.get('/', auth, async (req, res) => {
 // GET /api/listings/:id
 router.get('/:id', auth, async (req, res) => {
   try {
+    const access = await hasAccess(req.params.id, req.user.id);
+    if (!access.listing || !access.ok) return res.status(404).json({ message: 'Listing not found' });
     const listing = await prisma.listing.findUnique({
       where: { id: req.params.id },
       include: { host: { select: { id: true, name: true } } },
     });
-    if (!listing) return res.status(404).json({ message: 'Listing not found' });
     res.json(await withCalendars(listing));
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -100,9 +98,9 @@ router.get('/:id', auth, async (req, res) => {
 // PUT /api/listings/:id — owner or co-host can edit
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
-    if (!listing) return res.status(404).json({ message: 'Listing not found' });
-    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+    const { ok, canWrite, listing } = await hasAccess(req.params.id, req.user.id);
+    if (!listing || !ok) return res.status(404).json({ message: 'Listing not found' });
+    if (!canWrite) return res.status(403).json({ message: 'View-only access: you can look but not change this property' });
 
     const { name, street, city, managementType, icalUrl, calendars, defaultCleanerId } = req.body;
     const lim = fieldLimits({ name, street, city });
@@ -184,9 +182,9 @@ router.get('/:id/reset-list', auth, async (req, res) => {
 router.put('/:id/reset-list', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    const { ok, canWrite, listing } = await hasAccess(req.params.id, req.user.id);
     if (!listing) return res.status(404).json({ message: 'Not found' });
-    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+    if (!ok || !canWrite) return res.status(403).json({ message: ok ? 'View-only access: you can look but not change this property' : 'Not authorised' });
 
     const raw = Array.isArray(req.body.items) ? req.body.items : [];
     const rooms = await prisma.room.findMany({ where: { listingId: listing.id }, select: { id: true, name: true } });
@@ -256,9 +254,9 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/sync', auth, async (req, res) => {
   if (req.user.role !== 'host') return res.status(403).json({ message: 'Hosts only' });
   try {
-    const { ok, listing } = await hasAccess(req.params.id, req.user.id);
+    const { ok, canWrite, listing } = await hasAccess(req.params.id, req.user.id);
     if (!listing) return res.status(404).json({ message: 'Not found' });
-    if (!ok) return res.status(403).json({ message: 'Not authorised' });
+    if (!ok || !canWrite) return res.status(403).json({ message: ok ? 'View-only access: you can look but not change this property' : 'Not authorised' });
 
     const result = await syncListing(listing);
 

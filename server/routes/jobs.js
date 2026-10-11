@@ -4,18 +4,18 @@ const prisma = require('../lib/prisma');
 const crypto = require('crypto');
 const { sendSms } = require('../lib/sendSms');
 const rl = require('../lib/rateLimit');
+const { listingAccess } = require('../lib/access');
 
-// Who may see / act on a listing's jobs: the owner, an accepted co-host, or the person the job is assigned to
+// Who may see a job: owner, any accepted co-host (incl. view-only) or the person it is assigned to. Who may CHANGE it: owner,
+// full co-host, or the assigned person (view-only co-hosts cannot).
 async function listingRole(listingId, userId) {
-  const listing = await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true, hostId: true } });
-  if (!listing) return { listing: null, member: false };
-  if (listing.hostId === userId) return { listing, member: true };
-  const co = await prisma.listingCoHost.findFirst({ where: { listingId, userId, status: 'ACCEPTED' }, select: { id: true } });
-  return { listing, member: !!co };
+  const a = await listingAccess(listingId, userId);
+  return { listing: a.listing, member: a.canRead, writer: a.canWrite };
 }
-async function canTouchJob(job, userId) {
+async function canTouchJob(job, userId, { write = false } = {}) {
   if (job.cleanerId === userId) return true;
-  return (await listingRole(job.listingId, userId)).member;
+  const r = await listingRole(job.listingId, userId);
+  return write ? r.writer : r.member;
 }
 
 // US numbers only (the texting service is US): returns +1XXXXXXXXXX or null
@@ -90,7 +90,7 @@ router.patch('/:id/checklist/:itemId', auth, async (req, res) => {
   try {
     const { completed } = req.body;
     const owning = await prisma.jobChecklist.findFirst({ where: { id: req.params.itemId, jobId: req.params.id }, include: { job: { select: { listingId: true, cleanerId: true } } } });
-    if (!owning || !(await canTouchJob(owning.job, req.user.id))) return res.status(404).json({ message: 'Step not found' });
+    if (!owning || !(await canTouchJob(owning.job, req.user.id, { write: true }))) return res.status(404).json({ message: 'Step not found' });
     await prisma.jobChecklist.update({
       where: { id: req.params.itemId },
       data: { completed, completedAt: completed ? new Date() : null },
@@ -115,9 +115,7 @@ router.patch('/:id/status', auth, async (req, res) => {
   try {
     const existing = await prisma.job.findUnique({ where: { id: req.params.id }, include: { listing: true, checklistItems: true } });
     if (!existing) return res.status(404).json({ message: 'Job not found' });
-    const allowed = existing.cleanerId === req.user.id || existing.listing.hostId === req.user.id ||
-      !!(await prisma.listingCoHost.findFirst({ where: { listingId: existing.listingId, userId: req.user.id, status: 'ACCEPTED' } }));
-    if (!allowed) return res.status(403).json({ message: 'Not authorised' });
+    if (!(await canTouchJob({ listingId: existing.listingId, cleanerId: existing.cleanerId }, req.user.id, { write: true }))) return res.status(403).json({ message: 'Not authorised' });
     const done = !!req.body.completed;
     // with sub-tasks, "done" ticks every step so the checklist and status always agree
     if (existing.checklistItems.length) {
@@ -136,11 +134,7 @@ router.patch('/:id/assign', auth, async (req, res) => {
   try {
     const existing = await prisma.job.findUnique({ where: { id: req.params.id }, include: { listing: true } });
     if (!existing) return res.status(404).json({ message: 'Job not found' });
-    const isOwner = existing.listing.hostId === req.user.id;
-    const isCoHost = await prisma.listingCoHost.findFirst({
-      where: { listingId: existing.listingId, userId: req.user.id, status: 'ACCEPTED' },
-    });
-    if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
+    if (!(await listingRole(existing.listingId, req.user.id)).writer) return res.status(403).json({ message: 'Not authorised' });
 
     const cleanerId = req.body.cleanerId || null;
     if (cleanerId) {
@@ -176,11 +170,7 @@ router.post('/send-link', auth, async (req, res) => {
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
     if (!listing) return res.status(404).json({ message: 'Listing not found' });
 
-    const isOwner = listing.hostId === req.user.id;
-    const isCoHost = await prisma.listingCoHost.findFirst({
-      where: { listingId, userId: req.user.id, status: 'ACCEPTED' },
-    });
-    if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
+    if (!(await listingRole(listingId, req.user.id)).writer) return res.status(403).json({ message: 'Not authorised' });
 
     // Resolve phone + name from contractorId or raw phone. Texting needs the person's agreement.
     let resolvedPhone;
@@ -292,11 +282,7 @@ router.post('/withdraw/:token', auth, async (req, res) => {
     if (!jobToken) return res.status(404).json({ message: 'Assignment not found' });
 
     // Verify this host owns the listing
-    const isOwner = jobToken.listing.hostId === req.user.id;
-    const isCoHost = await prisma.listingCoHost.findFirst({
-      where: { listingId: jobToken.listingId, userId: req.user.id, status: 'ACCEPTED' },
-    });
-    if (!isOwner && !isCoHost) return res.status(403).json({ message: 'Not authorised' });
+    if (!(await listingRole(jobToken.listingId, req.user.id)).writer) return res.status(403).json({ message: 'Not authorised' });
 
     if (jobToken.status === 'WITHDRAWN') {
       return res.status(400).json({ message: 'Already withdrawn' });
