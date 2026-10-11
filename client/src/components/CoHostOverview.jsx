@@ -92,6 +92,20 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     }
   };
 
+  // an owner who runs the property themself can still receive quotes from a co-host they invited
+  const handleDecide = async (task, decision, note) => {
+    setBusyId(task.id);
+    try {
+      await api.post(`/maintenance/${task.id}/decision`, { decision, note });
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not save your decision');
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleSendDraft = async (task) => {
     if (!window.confirm(`Send this ${money(task.paymentAmount)} invoice to the owner? Only do this once the work is done.`)) return;
     setBusyId(task.id);
@@ -159,7 +173,7 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
           hint={nextTurnover ? `Next ${new Date(nextTurnover.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'Next 14 days'} accent="var(--teal)" />
         <StatTile icon="⚠️" label="Needs cleaner" value={needCleaner.length} hint={needCleaner.length ? 'Assign in Jobs' : 'All covered'} accent="var(--red)" />
         <StatTile icon="🛠️" label="Maintenance" value={maintenance.length} hint={`Due in ${SOON_DAYS} days`} accent="var(--amber)" />
-        {!selfManaged && <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} pending` : 'None pending'} accent="var(--amber)" />}
+        {(!selfManaged || quotes.length > 0) && <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} pending` : 'None pending'} accent="var(--amber)" />}
         <StatTile icon="📝" label="Your tasks" value={onMyPlate.length} hint="Waiting on you" accent="var(--ink-ghost)" />
       </div>
 
@@ -176,11 +190,11 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
       )}
       {soonTurnovers.length > 6 && <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 10 }}>+{soonTurnovers.length - 6} more in the Jobs tab.</p>}
 
-      {!selfManaged && (pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
+      {(pendingQuotes.length > 0 || decidedQuotes.length > 0) && (
         <>
-          <SectionTitle count={pendingQuotes.length}>Quotes</SectionTitle>
+          <SectionTitle count={pendingQuotes.length}>{selfManaged ? 'Quotes to approve' : 'Quotes'}</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
-            {[...pendingQuotes, ...decidedQuotes].map((q) => <QuoteCard key={q.id} task={q} canDecide={false} />)}
+            {[...pendingQuotes, ...decidedQuotes].map((q) => <QuoteCard key={q.id} task={q} canDecide={selfManaged} busy={busyId === q.id} onDecide={handleDecide} />)}
           </div>
         </>
       )}
