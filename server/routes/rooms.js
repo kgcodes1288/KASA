@@ -2,20 +2,17 @@ const router = require('express').Router();
 const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 
-// Helper: check if user is owner or accepted co-host of a listing
+const { listingAccess } = require('../lib/access');
+
+// write access: owner or full co-host (view-only co-hosts can look but not change)
 async function hasListingAccess(listingId, userId) {
-  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-  if (!listing) return false;
-  if (listing.hostId === userId) return true;
-  const coHost = await prisma.listingCoHost.findFirst({
-    where: { listingId, userId, status: 'ACCEPTED' },
-  });
-  return !!coHost;
+  return (await listingAccess(listingId, userId)).canWrite;
 }
 
 // GET /api/rooms/listing/:listingId
 router.get('/listing/:listingId', auth, async (req, res) => {
   try {
+    if (!(await listingAccess(req.params.listingId, req.user.id)).canRead) return res.status(404).json({ message: 'Not found' });
     const rooms = await prisma.room.findMany({
       where: { listingId: req.params.listingId },
       orderBy: { name: 'asc' },
