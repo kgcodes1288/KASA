@@ -45,7 +45,12 @@ app.use('/api/email',          require('./routes/email'));
 app.use('/api/admin',          require('./routes/admin'));
 app.use('/api/unsubscribe',    require('./routes/unsubscribe'));
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
+// /api/health = process is up; /api/health?deep=1 also proves the database answers (used by the uptime monitor)
+app.get('/api/health', async (req, res) => {
+  if (!req.query.deep) return res.json({ status: 'ok' });
+  try { await prisma.$queryRaw`SELECT 1`; res.json({ status: 'ok', db: 'ok' }); }
+  catch (e) { console.error('[health] database check failed:', e.message); res.status(503).json({ status: 'down', db: 'error' }); }
+});
 
 // last-resort handlers: JSON answers, never stack traces or internals
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found' }));
