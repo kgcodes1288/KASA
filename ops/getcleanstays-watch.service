@@ -1,0 +1,8 @@
+[Unit]
+Description=GetCleanStays uptime and error check
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/getcleanstays-watch.sh run
+Nice=10
