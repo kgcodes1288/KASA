@@ -16,7 +16,8 @@ notify() { # title priority tags message
 
 # result <name> <ok 0|1> <message>: failing twice in a row -> DOWN alert; first success afterwards -> RECOVERED
 result() {
-  local name=$1 ok=$2 msg=$3 f="$STATE/$name.fails" a="$STATE/$name.alerted"
+  local name=$1 ok=$2 msg=$3
+  local f="$STATE/$name.fails" a="$STATE/$name.alerted"
   local fails=0; [ -f "$f" ] && fails=$(cat "$f")
   if [ "$ok" = 0 ]; then
     echo 0 >"$f"

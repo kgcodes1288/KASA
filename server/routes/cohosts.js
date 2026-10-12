@@ -215,6 +215,24 @@ router.get('/pending', authenticate2, async (req, res) => {
   res.json(withHost);
 });
 
+// POST /api/cohosts/accept-invite/:token — the "Accept Invite" button in the invitation email.
+// The token proves the person can read the invited mailbox; the signed-in account must also use that email address.
+router.post('/accept-invite/:token', authenticate2, async (req, res) => {
+  const invite = await prisma.listingCoHost.findFirst({
+    where: { inviteToken: String(req.params.token), status: 'PENDING' },
+    include: { listing: { include: { host: { select: { id: true, name: true } } } } },
+  });
+  if (!invite) return res.status(404).json({ error: 'This invitation is no longer valid. Ask the owner to send a new one.' });
+  if ((invite.inviteEmail || '').toLowerCase() !== String(req.user.email || '').toLowerCase()) {
+    const [u, d] = String(invite.inviteEmail || '').split('@');
+    return res.status(403).json({ error: `This invitation was sent to ${u.slice(0, 2)}***@${d || ''}. Sign in with that email address to accept it.` });
+  }
+  if (invite.listing.hostId === req.user.id) return res.status(400).json({ error: 'You own this property.' });
+  await prisma.listingCoHost.update({ where: { id: invite.id }, data: { status: 'ACCEPTED', userId: req.user.id } });
+  await notify(invite.listing.host.id, 'COHOST_ACCEPTED', 'Co-host accepted', `${req.user.name} accepted your co-host invite for ${invite.listing.name}`, invite.listingId);
+  res.json({ message: 'Invite accepted.', listingId: invite.listingId, listingName: invite.listing.name });
+});
+
 // POST /api/cohosts/:id/accept
 router.post('/:id/accept', authenticate2, async (req, res) => {
   const coHost = await prisma.listingCoHost.findFirst({

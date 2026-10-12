@@ -7,6 +7,7 @@ const auth = require('../middleware/auth');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../lib/email');
 const { normalizeEmail, isValidEmail, passwordProblem, cleanName } = require('../lib/validate');
 const rl = require('../lib/rateLimit');
+const { setSession, clearSession, parseCookies, cookieOpts } = require('../lib/session');
 
 const VERIFY_HOURS = 24;
 const verifyExpiry = () => new Date(Date.now() + VERIFY_HOURS * 3600 * 1000);
@@ -81,7 +82,9 @@ router.post('/register', rl.limit({ name: 'register', windowMs: 60 * 60 * 1000, 
       verifyUrl: `${CLIENT_URL}/verify-email?token=${emailVerifyToken}`,
     }).catch(() => {});
 
-    res.status(201).json({ token: signToken(user), user: safeUser(user) });
+    const tok = signToken(user);
+    setSession(res, tok);
+    res.status(201).json({ token: tok, user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -108,14 +111,22 @@ router.post('/login', async (req, res) => {
     if (!(await bcrypt.compare(String(password), user.password)))
       return fail('Invalid credentials');
     rl.clear(kAcct);
-    res.json({ token: signToken(user), user: safeUser(user) });
+    const tok = signToken(user);
+    setSession(res, tok);
+    res.json({ token: tok, user: safeUser(user) });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// POST /api/auth/logout — ends the browser session (the cookie is HttpOnly, so only the server can remove it)
+router.post('/logout', (req, res) => { clearSession(res); res.json({ message: 'Signed out' }); });
+
 // GET /api/auth/google — redirect to Google OAuth consent screen
 router.get('/google', (req, res) => {
+  // CSRF protection for the sign-in round trip: a random value goes out with the request and must come back unchanged
+  const state = require('crypto').randomBytes(24).toString('hex');
+  res.cookie('g_state', state, { ...cookieOpts(), maxAge: 10 * 60 * 1000 });
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: process.env.GOOGLE_CALLBACK_URL,
@@ -123,6 +134,7 @@ router.get('/google', (req, res) => {
     scope: 'openid email profile',
     access_type: 'offline',
     prompt: 'select_account',
+    state,
   });
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
@@ -133,6 +145,10 @@ router.get('/google/callback', async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) return res.redirect(`${clientUrl}/login?error=google_failed`);
+    const expected = parseCookies(req).g_state;
+    res.clearCookie('g_state', cookieOpts());
+    if (!expected || req.query.state !== expected)
+      return res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent('Sign-in could not be verified. Please try again.')}`);
 
     // Exchange auth code for access token
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -196,8 +212,8 @@ router.get('/google/callback', async (req, res) => {
       data: { userId: user.id },
     });
 
-    const token = signToken(user);
-    res.redirect(`${clientUrl}/auth/callback?token=${token}`);
+    setSession(res, signToken(user));
+    res.redirect(`${clientUrl}/auth/callback?ok=1`);
   } catch (err) {
     console.error('Google OAuth error:', err);
     res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent(err.message || 'Unknown error')}`);
@@ -279,7 +295,9 @@ router.put('/password', auth, async (req, res) => {
       where: { id: req.user.id },
       data: { password: hashed, tokenVersion: { increment: 1 } },    // every other session is signed out
     });
-    res.json({ message: 'Password updated successfully. Other devices have been signed out.', token: signToken(updated) });
+    const fresh = signToken(updated);
+    if (parseCookies(req)[require('../lib/session').COOKIE]) setSession(res, fresh);
+    res.json({ message: 'Password updated successfully. Other devices have been signed out.', token: fresh });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

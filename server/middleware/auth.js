@@ -1,12 +1,20 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const { COOKIE, parseCookies } = require('../lib/session');
 
 module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer '))
-    return res.status(401).json({ message: 'No token provided' });
-
-  const token = authHeader.split(' ')[1];
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else {
+    // browser session cookie: state-changing requests must also carry our custom header, which other websites cannot send
+    // without a CORS preflight that this API refuses (CSRF protection on top of SameSite=Lax)
+    token = parseCookies(req)[COOKIE] || null;
+    if (token && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-cleanstay-csrf'] !== '1')
+      return res.status(403).json({ message: 'Blocked a request that did not come from the CleanStay app.' });
+  }
+  if (!token) return res.status(401).json({ message: 'No token provided' });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_secret');
     const user = await prisma.user.findUnique({ where: { id: decoded.id } });

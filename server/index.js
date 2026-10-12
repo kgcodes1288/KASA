@@ -25,6 +25,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Overall safety net per network address (the sign-in, sign-up, text and email limits are stricter and sit on their own routes)
+const rlimit = require('./lib/rateLimit');
+app.use('/api', (req, res, next) => (req.method === 'OPTIONS' || req.path === '/health' ? next() : rlimit.limit({ name: 'api-global', windowMs: 5 * 60 * 1000, max: 1500, message: 'Too many requests.' })(req, res, next)));
+
 // Routes
 app.use('/api/auth',        require('./routes/auth'));
 app.use('/api/listings',    require('./routes/listings'));
