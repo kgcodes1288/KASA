@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  mcpAppApproval Boolean @default(true)
   id        String   @id @default(cuid())
   name      String
   email     String   @unique
@@ -277,6 +278,7 @@ model Notification {
 }
 
 enum NotifType {
+  MCP_APPROVAL
   COHOST_ACCEPTED
   JOB_CREATED
   CONTRACTOR_ACCEPTED
@@ -389,4 +391,19 @@ model McpAuditLog {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// A high-impact action an AI assistant asked for; it only runs after the signed-in user approves it inside CleanStay.
+model McpPendingAction {
+  id        String   @id @default(cuid())
+  userId    String
+  clientId  String?
+  tool      String
+  argsHash  String
+  preview   String
+  status    String   @default("PENDING") // PENDING | APPROVED | DENIED | USED
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId, status])
 }

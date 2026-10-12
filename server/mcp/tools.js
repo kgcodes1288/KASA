@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const prisma = require('../lib/prisma');
+const crypto = require('crypto');
 const { callApi } = require('./api');
+const { notify } = require('../lib/notify');
 
 const DAY = 86400000;
 const money = (v) => {
@@ -61,6 +63,36 @@ function registerTools(server, ctx) {
       if (write && !ctx.scopes.includes('write'))
         return errResult('This connection is read-only. The user needs to reconnect CleanStay and allow changes to use this tool.');
       try {
+        if (confirm) {
+          const user = await prisma.user.findUnique({ where: { id: ctx.userId }, select: { mcpAppApproval: true } });
+          if (user?.mcpAppApproval !== false) {
+            // approval happens inside CleanStay, not in the chat: the assistant's own "confirm" flag is ignored
+            const { confirm: _c, ...rest } = args;
+            const preview = await confirm(args);
+            if (!preview) { const out = await run(args); await audit(name, write, true); return textResult(typeof out === 'string' ? out : json(out)); }
+            const argsHash = crypto.createHash('sha256').update(JSON.stringify([name, rest])).digest('hex');
+            const now = new Date();
+            const act = await prisma.mcpPendingAction.findFirst({ where: { userId: ctx.userId, tool: name, argsHash, expiresAt: { gt: now } }, orderBy: { createdAt: 'desc' } });
+            if (act?.status === 'APPROVED') {
+              const claimed = await prisma.mcpPendingAction.updateMany({ where: { id: act.id, status: 'APPROVED' }, data: { status: 'USED' } });
+              if (claimed.count === 1) {
+                const out = await run({ ...args, confirm: true });
+                await audit(name, write, true, 'approved in app');
+                return textResult(typeof out === 'string' ? out : json(out));
+              }
+            }
+            if (act?.status === 'DENIED') {
+              await audit(name, write, false, 'denied in app');
+              return errResult('The user declined this action in CleanStay. Do not retry it; ask them what they would like instead.');
+            }
+            if (act?.status === 'PENDING')
+              return textResult('STILL WAITING — the user has not approved this in CleanStay yet. Tell them to open CleanStay → Account → Chat assistants and tap Approve, then call this tool again with the same arguments.');
+            await prisma.mcpPendingAction.create({ data: { userId: ctx.userId, clientId: ctx.clientId, tool: name, argsHash, preview: String(preview).slice(0, 600), expiresAt: new Date(now.getTime() + 15 * 60000) } });
+            await notify(ctx.userId, 'MCP_APPROVAL', 'Your assistant needs your approval', String(preview).slice(0, 200)).catch(() => {});
+            await audit(name, write, true, 'awaiting approval in app');
+            return textResult(`APPROVAL REQUIRED — nothing has been done yet.\n${preview}\nThe user must approve this inside CleanStay (Account → Chat assistants → Waiting for your approval). Tell them that, and once they say they approved it, call ${name} again with the same arguments. Their chat reply alone is not enough.`);
+          }
+        }
         if (confirm && args.confirm !== true) {
           const preview = await confirm(args);
           await audit(name, write, true, 'awaiting confirmation');

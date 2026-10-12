@@ -8,6 +8,12 @@ export default function ConnectedApps() {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(null);
+  const [appr, setAppr] = useState({ pending: [], requireApproval: true });
+
+  const loadAppr = () => api.get('/mcp/approvals').then((r) => setAppr(r.data)).catch(() => {});
+  useEffect(() => { loadAppr(); const t = setInterval(loadAppr, 8000); return () => clearInterval(t); }, []);
+  const decide = async (id, d) => { setBusy(id); try { await api.post(`/mcp/approvals/${id}/${d}`); await loadAppr(); await load(); } catch { await loadAppr(); } finally { setBusy(null); } };
+  const setPref = async (v) => { setAppr((a) => ({ ...a, requireApproval: v })); await api.put('/mcp/approval-preference', { requireApproval: v }).catch(loadAppr); };
 
   const load = () => api.get('/mcp/connections').then((r) => setData(r.data)).catch(() => setData({ connections: [], recent: [], connectorUrl: null }));
   useEffect(() => { load(); }, []);
@@ -32,6 +38,25 @@ export default function ConnectedApps() {
         Manage your properties by chatting — ask what needs attention, add tasks and vendors, send or approve quotes — from Claude, ChatGPT or Gemini.
       </p>
 
+      {appr.pending.length > 0 && (
+        <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: 14, margin: '14px 0' }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#92400e', marginBottom: 8 }}>⏳ Waiting for your approval</div>
+          {appr.pending.map((a) => (
+            <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginTop: 6 }}>
+              <div style={{ flex: 1, minWidth: 200, fontSize: 14 }}>
+                <div>{a.preview}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-ghost)' }}>Asked by your chat assistant · expires {new Date(a.expiresAt).toLocaleTimeString()}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-primary btn-sm" disabled={busy === a.id} onClick={() => decide(a.id, 'approve')}>Approve</button>
+                <button className="btn btn-secondary btn-sm" disabled={busy === a.id} onClick={() => decide(a.id, 'deny')}>Decline</button>
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 12, color: '#92400e', marginTop: 8 }}>After approving, tell your assistant you did, and it will carry the action out.</div>
+        </div>
+      )}
+
       {data.connectorUrl ? (
         <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, margin: '14px 0' }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 6 }}>Your CleanStay connector URL</div>
@@ -49,6 +74,11 @@ export default function ConnectedApps() {
       ) : (
         <p style={{ fontSize: 13, color: 'var(--ink-ghost)' }}>The chat connector isn't switched on for this environment yet.</p>
       )}
+
+      <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, margin: '14px 0 0' }}>
+        <input type="checkbox" checked={appr.requireApproval} onChange={(e) => setPref(e.target.checked)} style={{ marginTop: 3 }} />
+        <span><strong>Require my approval in CleanStay for money, messages and deletions.</strong> Recommended. When on, your assistant can only ask; the action runs after you tap Approve here, so a chat message alone can never trigger it.</span>
+      </label>
 
       <h3 style={{ fontSize: 15, margin: '18px 0 8px' }}>Connected apps</h3>
       {data.connections.length === 0 ? (
