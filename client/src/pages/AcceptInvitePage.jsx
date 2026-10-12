@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Navigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import { rememberPostLoginRedirect } from '../postLoginRedirect';
 
 export default function AcceptInvitePage() {
   const { token } = useParams();
@@ -16,27 +19,13 @@ export default function AcceptInvitePage() {
     const accept = async () => {
       setStatus('loading');
       try {
-        const res = await fetch(`/api/cohosts/accept/${token}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          setStatus('error');
-          setMessage(data.error || 'Something went wrong.');
-          return;
-        }
-
+        const { data } = await api.post(`/cohosts/accept-invite/${token}`);
         setStatus('success');
-        setMessage('Invite accepted! Redirecting to your dashboard...');
-        setTimeout(() => navigate('/host'), 2000);
+        setMessage(`Invite accepted! You're now a co-host of ${data.listingName}. Redirecting…`);
+        setTimeout(() => navigate(`/listings/${data.listingId}`), 1800);
       } catch (err) {
         setStatus('error');
-        setMessage('Network error. Please try again.');
+        setMessage(err.response?.data?.error || 'Something went wrong. Please try again.');
       }
     };
 
@@ -52,9 +41,21 @@ export default function AcceptInvitePage() {
     );
   }
 
-  // Not logged in — send to login, come back after
+  // Not signed in: sign in or create an account, then come straight back here (the invitee often has no account yet)
   if (!user) {
-    return <Navigate to={`/login?redirect=/accept-invite/${token}`} replace />;
+    rememberPostLoginRedirect(`/accept-invite/${token}`);
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.card}>
+          <h2 style={styles.title}>You've been invited to co-host</h2>
+          <p style={{ color: '#555', fontSize: 15, marginBottom: 22 }}>Sign in with the email address the invitation was sent to, or create a free account with it.</p>
+          <div style={{ display: 'grid', gap: 10 }}>
+            <Link to="/login" className="btn btn-primary" style={{ justifyContent: 'center' }}>Sign in</Link>
+            <Link to="/register" className="btn btn-secondary" style={{ justifyContent: 'center' }}>Create an account</Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

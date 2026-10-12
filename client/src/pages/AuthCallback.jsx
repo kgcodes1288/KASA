@@ -11,7 +11,7 @@ export default function AuthCallback() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    const token = searchParams.get('token');
+    const ok = searchParams.get('ok');
     const error = searchParams.get('error');
     const msg = searchParams.get('msg');
 
@@ -20,15 +20,16 @@ export default function AuthCallback() {
       return;
     }
 
-    if (!token) {
-      setErrorMsg('No token received from Google. Please try again.');
+    if (!ok) {
+      setErrorMsg('Google sign-in did not finish. Please try again.');
       return;
     }
 
-    localStorage.setItem('token', token);
+    // the server already set the session cookie; just ask who we are
+    localStorage.removeItem('token');
     api.get('/auth/me')
       .then(({ data }) => {
-        loginWithToken(token, data);
+        loginWithToken(null, data);
         navigate(consumePostLoginRedirect() || (data.role === 'host' ? '/host' : '/cleaner'));
       })
       .catch((err) => {
