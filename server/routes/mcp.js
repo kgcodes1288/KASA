@@ -98,4 +98,31 @@ router.delete('/connections/:clientId', auth, async (req, res) => {
   }
 });
 
+// ── In-app approvals for high-impact assistant actions (never usable by the assistant itself) ──
+const humanOnly = (req, res, next) => (req.viaMcp ? res.status(403).json({ message: 'Only you can approve this, from the CleanStay app.' }) : next());
+
+router.get('/approvals', auth, humanOnly, async (req, res) => {
+  const [pending, user] = await Promise.all([
+    prisma.mcpPendingAction.findMany({ where: { userId: req.user.id, status: 'PENDING', expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' }, select: { id: true, tool: true, preview: true, createdAt: true, expiresAt: true } }),
+    prisma.user.findUnique({ where: { id: req.user.id }, select: { mcpAppApproval: true } }),
+  ]);
+  res.json({ pending, requireApproval: user?.mcpAppApproval !== false });
+});
+
+router.post('/approvals/:id/:decision', auth, humanOnly, async (req, res) => {
+  const { id, decision } = req.params;
+  if (!['approve', 'deny'].includes(decision)) return res.status(400).json({ message: 'Unknown decision' });
+  const r = await prisma.mcpPendingAction.updateMany({
+    where: { id, userId: req.user.id, status: 'PENDING', expiresAt: { gt: new Date() } },
+    data: { status: decision === 'approve' ? 'APPROVED' : 'DENIED' },
+  });
+  if (!r.count) return res.status(404).json({ message: 'This request has expired or was already answered.' });
+  res.json({ ok: true });
+});
+
+router.put('/approval-preference', auth, humanOnly, async (req, res) => {
+  await prisma.user.update({ where: { id: req.user.id }, data: { mcpAppApproval: req.body?.requireApproval !== false } });
+  res.json({ ok: true });
+});
+
 module.exports = router;

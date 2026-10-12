@@ -14,7 +14,7 @@ export default function Connect() {
 
   const [info, setInfo] = useState(null);
   const [error, setError] = useState('');
-  const [allowWrite, setAllowWrite] = useState(true);
+  const [allowWrite, setAllowWrite] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export default function Connect() {
         {info.wantsWrite && (
           <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8, color: 'var(--ink)' }}>
             <input type="checkbox" checked={allowWrite} onChange={(e) => setAllowWrite(e.target.checked)} style={{ marginTop: 3 }} />
-            <span>Make changes for you — create tasks, assign cleaners, send quotes and invoices, approve or decline quotes. Anything involving money or messages needs your explicit confirmation.</span>
+            <span>Make changes for you — create tasks, assign cleaners, send quotes and invoices, approve or decline quotes. Anything involving money, messages or deleting needs your approval inside CleanStay first. Leave this off for view-only.</span>
           </label>
         )}
       </div>
