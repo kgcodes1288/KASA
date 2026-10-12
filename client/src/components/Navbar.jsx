@@ -26,6 +26,11 @@ export default function Navbar() {
                 My Listings
               </NavLink>
             )}
+            {user.role === 'host' && (
+              <NavLink to="/insights" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                Insights
+              </NavLink>
+            )}
             {user.role === 'cleaner' && (
               <NavLink to="/cleaner" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                 My Jobs

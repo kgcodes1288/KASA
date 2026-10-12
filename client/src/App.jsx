@@ -22,6 +22,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import Connect from './pages/Connect';
+import InsightsPage from './pages/InsightsPage';
 
 function PrivateRoute({ children, role }) {
   const { user, loading } = useAuth();
@@ -83,6 +84,9 @@ export default function App() {
           <Route path="/" element={<PrivateRoute><RoleRedirect /></PrivateRoute>} />
           <Route path="/host" element={
             <PrivateRoute role="host"><Layout><HostDashboard /></Layout></PrivateRoute>
+          } />
+          <Route path="/insights" element={
+            <PrivateRoute role="host"><Layout><InsightsPage /></Layout></PrivateRoute>
           } />
           <Route path="/listings/:id" element={
             <PrivateRoute role="host"><Layout><ListingDetail /></Layout></PrivateRoute>
