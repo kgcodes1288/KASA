@@ -67,6 +67,13 @@ run_checks() {
     n=$(echo "$logs" | grep -cE "$pat")
     if [ "$n" -gt 0 ]; then ex=$(echo "$logs" | grep -E "$pat" | tail -1 | cut -c1-160); warn_once "log-${pat//[^a-zA-Z]/}" 1800 "GetCleanStays errors: $pat ($n in 2 min)" "$ex"; fi
   done
+
+  # attack signals from the security-event log (last 10 min): many failed sign-ins overall, or from one address
+  q() { docker exec -i webapp-postgres-1 sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB" -tA -F" " -c "$0"' "$1" 2>/dev/null; }
+  tot=$(q "select count(*) from \"SecurityEvent\" where type='login_failed' and \"createdAt\" > now() - interval '10 minutes'")
+  if [ "${tot:-0}" -ge 40 ]; then warn_once login-burst 3600 "GetCleanStays: $tot failed sign-ins in 10 min" "Possible password-guessing. See Account > or query SecurityEvent (login_failed)."; fi
+  top=$(q "select ip, count(*) from \"SecurityEvent\" where type in ('login_failed','csrf_blocked','rate_limited') and \"createdAt\" > now() - interval '10 minutes' group by ip order by 2 desc limit 1")
+  set -- $top; if [ -n "${2:-}" ] && [ "$2" -ge 25 ]; then warn_once "ip-$1" 3600 "GetCleanStays: $2 blocked/failed requests from $1" "One address is hammering the app in the last 10 min."; fi
 }
 
 case "${1:-run}" in

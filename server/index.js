@@ -70,6 +70,7 @@ async function main() {
   try {
     await prisma.$connect();
     console.log('PostgreSQL connected via Prisma');
+    require('./lib/security').prune(); setInterval(() => require('./lib/security').prune(), 24 * 3600 * 1000).unref();
     await require('./scripts/migrate-emails').migrateEmails().catch((e) => console.error('[migrate-emails] failed:', e.message));
     await require('./scripts/migrate-vendor-phones').migrateVendorPhones().catch((e) => console.error('[migrate-vendor-phones] failed:', e.message));
     await require('./scripts/migrate-turnover').migrateTurnover().catch((e) => console.error('[migrate-turnover] failed:', e.message));

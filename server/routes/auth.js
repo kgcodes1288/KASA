@@ -1,3 +1,4 @@
+const { secLog } = require('../lib/security');
 const router = require('express').Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -102,8 +103,8 @@ router.post('/login', async (req, res) => {
     const kAcct = `login-fail|${req.ip}|${email}`, kIp = `login-fail-ip|${req.ip}`;
     const bA = rl.peek(kAcct), bI = rl.peek(kIp);
     if ((bA && bA.n >= 10) || (bI && bI.n >= 60))
-      return rl.retry(res, bA && bA.n >= 10 ? bA : bI, 'Too many failed sign-in attempts.');
-    const fail = (msg, status = 401) => { rl.hit(kAcct, WIN); rl.hit(kIp, WIN); return res.status(status).json({ message: msg }); };
+      return rl.retry(res, bA && bA.n >= 10 ? bA : bI, 'Too many failed sign-in attempts.', 'login-locked');
+    const fail = (msg, status = 401) => { secLog('login_failed', req, email); rl.hit(kAcct, WIN); rl.hit(kIp, WIN); return res.status(status).json({ message: msg }); };
     const user = await findByEmail(email);
     if (!user) return fail('Invalid credentials');
     if (!user.password)
@@ -148,7 +149,7 @@ router.get('/google/callback', async (req, res) => {
     const expected = parseCookies(req).g_state;
     res.clearCookie('g_state', cookieOpts());
     if (!expected || req.query.state !== expected)
-      return res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent('Sign-in could not be verified. Please try again.')}`);
+      { secLog('google_state_failed', req); return res.redirect(`${clientUrl}/login?error=google_failed&msg=${encodeURIComponent('Sign-in could not be verified. Please try again.')}`); }
 
     // Exchange auth code for access token
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {

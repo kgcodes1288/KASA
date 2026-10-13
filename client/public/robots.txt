@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /register
+Allow: /privacy-terms
+Allow: /compliance-terms
+Disallow: /host
+Disallow: /listings/
+Disallow: /insights
+Disallow: /cleaner
+Disallow: /jobs/
+Disallow: /job/
+Disallow: /maintenance/
+Disallow: /account
+Disallow: /notifications
+Disallow: /admin
+Disallow: /accept-invite/
+Disallow: /connect
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /forgot-password
+
+Sitemap: https://getcleanstays.com/sitemap.xml

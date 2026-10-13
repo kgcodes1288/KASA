@@ -407,3 +407,16 @@ model McpPendingAction {
 
   @@index([userId, status])
 }
+
+// Security-relevant events (failed sign-ins, rate-limit blocks, blocked requests, approvals). Kept 90 days. Never stores passwords, tokens or message contents.
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  type      String
+  ip        String?
+  userId    String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([ip, createdAt])
+}

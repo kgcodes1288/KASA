@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const { secLog } = require('../lib/security');
 const auth = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { verifyReq, sha, rand, CODE_TTL_MS } = require('../mcp/shared');
@@ -116,6 +117,7 @@ router.post('/approvals/:id/:decision', auth, humanOnly, async (req, res) => {
     where: { id, userId: req.user.id, status: 'PENDING', expiresAt: { gt: new Date() } },
     data: { status: decision === 'approve' ? 'APPROVED' : 'DENIED' },
   });
+  if (r.count) secLog('assistant_action_' + (decision === 'approve' ? 'approved' : 'declined'), req, id);
   if (!r.count) return res.status(404).json({ message: 'This request has expired or was already answered.' });
   res.json({ ok: true });
 });

@@ -1,4 +1,5 @@
 // Small in-memory rate limiter (one API instance). Counts hits per key inside a sliding window.
+const { secLog } = require('./security');
 const buckets = new Map();
 setInterval(() => { const now = Date.now(); for (const [k, b] of buckets) if (b.reset < now) buckets.delete(k); }, 60 * 1000).unref();
 
@@ -12,7 +13,8 @@ function hit(key, windowMs) {
 const peek = (key) => { const b = buckets.get(key); return b && b.reset > Date.now() ? b : null; };
 const clear = (key) => buckets.delete(key);
 
-const retry = (res, b, msg) => {
+const retry = (res, b, msg, name) => {
+  secLog('rate_limited', res.req, name || String(msg).slice(0, 60));
   const secs = Math.max(1, Math.ceil((b.reset - Date.now()) / 1000));
   res.set('Retry-After', String(secs));
   return res.status(429).json({ message: `${msg} Try again in ${secs > 90 ? Math.ceil(secs / 60) + ' minutes' : secs + ' seconds'}.` });
@@ -21,7 +23,7 @@ const retry = (res, b, msg) => {
 // middleware: at most `max` requests per `windowMs` for key(req)
 const limit = ({ name, windowMs, max, key = (req) => req.ip, message = 'Too many requests.' }) => (req, res, next) => {
   const b = hit(`${name}|${key(req)}`, windowMs);
-  if (b.n > max) return retry(res, b, message);
+  if (b.n > max) return retry(res, b, message, name);
   next();
 };
 
