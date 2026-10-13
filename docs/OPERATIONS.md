@@ -32,3 +32,17 @@ small idempotent migration scripts (`server/scripts/migrate-*.js`).
 ## Regression test suite
 `~/qa/*.py` on Lasso: scripted checks for sign-in, listings, jobs/texts, tasks/quotes, notifications, security, screens and the AI connector.
 They need QA accounts (password `QaTest#2026`) and were run against prod on 2026-10-11, then all QA data was deleted.
+
+## Logs
+
+| What | Where | Kept |
+|---|---|---|
+| Every web request (time, real client IP, method, path, status, browser; includes crawlers and scanners) | `/opt/stacks/webapp/caddy-logs/access.log` (root-only: `sudo tail -f`) | 14 days, rolls at 50 MB |
+| Security events (failed sign-ins, lockouts, CSRF blocks, bad Google state, assistant approvals) | Postgres table `SecurityEvent` | 90 days, pruned daily |
+| Assistant tool calls | Postgres `McpAuditLog` | kept |
+| App/container output | `docker logs <container>` | 10 MB x 5 files per container |
+
+Tokens in links (`?token=`, `?code=`, `/job/<token>` ...) and Cookie/Authorization headers are redacted before they reach the access log.
+Handy: `sudo grep -o '"remote_ip":"[^"]*"' access.log | sort | uniq -c | sort -rn | head` (top talkers);
+`select type, ip, count(*) from "SecurityEvent" where "createdAt" > now() - interval '1 day' group by 1,2 order by 3 desc;`
+The monitor pushes an alert for 40+ failed sign-ins in 10 minutes, or 25+ blocked/failed requests from one address.
