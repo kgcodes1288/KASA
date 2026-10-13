@@ -55,6 +55,12 @@ export default function LegalPage() {
           We use industry-standard security practices including encrypted passwords (bcrypt)
           and JWT-based authentication. Your data is stored securely on our servers.
         </p>
+        <p>
+          To keep the service secure and reliable, our servers keep access logs (time, your IP
+          address, the page or action requested and the browser type) for 14 days, and a record of
+          security events such as failed sign-ins for 90 days. These logs never contain passwords
+          or message contents.
+        </p>
 
         <h3>7. Contact</h3>
         <p>

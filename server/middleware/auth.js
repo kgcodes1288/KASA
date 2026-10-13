@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
 const { COOKIE, parseCookies } = require('../lib/session');
+const { secLog } = require('../lib/security');
 
 module.exports = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -12,7 +13,7 @@ module.exports = async (req, res, next) => {
     // without a CORS preflight that this API refuses (CSRF protection on top of SameSite=Lax)
     token = parseCookies(req)[COOKIE] || null;
     if (token && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-cleanstay-csrf'] !== '1')
-      return res.status(403).json({ message: 'Blocked a request that did not come from the CleanStay app.' });
+    { secLog('csrf_blocked', req, `${req.method} ${req.baseUrl}`); return res.status(403).json({ message: 'Blocked a request that did not come from the CleanStay app.' }); }
   }
   if (!token) return res.status(401).json({ message: 'No token provided' });
   try {
