@@ -6,6 +6,12 @@ import './AuthLanding.css';
 const PLAYLIST_ID = 'PLHO1unSFsfcc';
 const FIRST_VIDEO_ID = 'DFIaiF8wCSE';
 const AI_VIDEO_ID = 'sZiuD9MnfGk';   // tutorial 15: Connect your AI assistant
+// The two role-based overview videos (playlist "Overview")
+const OVERVIEWS = [
+  { id: 'vu649iVh6wE', tone: 'teal', icon: '🏠', who: 'Hosts & property owners', line: 'Calendars, cleanings, quotes and invoices, run by chatting with your AI assistant.' },
+  { id: 'sK3hoadYG2Q', tone: 'violet', icon: '🤝', who: 'Co-hosts & property managers', line: 'Quotes, invoices and to-dos for every owner, with no more chasing.' },
+];
+const OVERVIEW_PLAYLIST = 'PLBwb8DBuQh7M';
 
 const PERSONAS = [
   {
@@ -89,6 +95,34 @@ function AiVideo() {
         </button>
       )}
     </div>
+  );
+}
+
+// One role-based overview: shows its thumbnail and only loads YouTube once it's played
+function OverviewCard({ o }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <article className={`landing-ov landing-ov--${o.tone}`}>
+      <div className="landing-ov-frame">
+        {playing ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${o.id}?autoplay=1&rel=0`}
+            title={`CleanStay overview for ${o.who}`}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture; fullscreen"
+            allowFullScreen
+          />
+        ) : (
+          <button type="button" className="landing-poster" onClick={() => setPlaying(true)} aria-label={`Play the overview for ${o.who}`}>
+            <img src={`https://i.ytimg.com/vi/${o.id}/maxresdefault.jpg`} alt="" loading="lazy" />
+            <span className="landing-play landing-play--sm" aria-hidden="true">▶</span>
+          </button>
+        )}
+      </div>
+      <div className="landing-ov-text">
+        <h3><span aria-hidden="true">{o.icon}</span> {o.who}</h3>
+        <p>{o.line}</p>
+      </div>
+    </article>
   );
 }
 
@@ -257,7 +291,17 @@ export default function AuthLanding({ mode = 'login', children }) {
       <section id="watch" className="landing-section landing-section--navy">
         <div className="landing-head landing-head--light">
           <span className="landing-kicker">See it in action</span>
-          <h2>A two-minute tour</h2>
+          <h2>See CleanStay for your role</h2>
+          <p>Pick the overview that fits you. About four minutes each.</p>
+        </div>
+        <div className="landing-ovs">
+          {OVERVIEWS.map((o) => <OverviewCard key={o.id} o={o} />)}
+        </div>
+        <p className="landing-ov-more">
+          <a href={`https://www.youtube.com/playlist?list=${OVERVIEW_PLAYLIST}`} target="_blank" rel="noreferrer">Watch both on YouTube</a>
+        </p>
+        <div className="landing-head landing-head--light landing-head--sub">
+          <h3>Or follow the step-by-step tutorials</h3>
           <p>Short videos walk you through every step of CleanStay.</p>
         </div>
         <div className="landing-video">
