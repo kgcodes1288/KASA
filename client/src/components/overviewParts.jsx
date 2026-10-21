@@ -224,7 +224,7 @@ export function QuoteCard({ task, canDecide, busy, onDecide }) {
             </div>
           </div>
         </div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{money(task.paymentAmount)}</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)', lineHeight: 1, whiteSpace: 'nowrap', flexShrink: 0 }}>{money(task.paymentAmount)}</div>
       </div>
 
       {task.notes && <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>{task.notes}</div>}
@@ -293,7 +293,7 @@ export function DraftInvoiceCard({ task, ownerName, busy, onEdit, onSend, onDisc
             <div style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 2 }}>To {ownerName}</div>
           </div>
         </div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{money(task.paymentAmount)}</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--ink)', lineHeight: 1, whiteSpace: 'nowrap', flexShrink: 0 }}>{money(task.paymentAmount)}</div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         <Chip icon="✏️">Draft · not sent</Chip>
