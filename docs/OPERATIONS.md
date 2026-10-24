@@ -46,3 +46,15 @@ Tokens in links (`?token=`, `?code=`, `/job/<token>` ...) and Cookie/Authorizati
 Handy: `sudo grep -o '"remote_ip":"[^"]*"' access.log | sort | uniq -c | sort -rn | head` (top talkers);
 `select type, ip, count(*) from "SecurityEvent" where "createdAt" > now() - interval '1 day' group by 1,2 order by 3 desc;`
 The monitor pushes an alert for 40+ failed sign-ins in 10 minutes, or 25+ blocked/failed requests from one address.
+
+## Network path (since 2026-10-24)
+
+All public traffic reaches the app through a Cloudflare Tunnel, so the home IP is not exposed and no router ports are needed.
+`getcleanstays.com`, `www`, `api`, `mcp`, `staging`, `api-staging`, `mcp-staging` and `raincheck-api` are proxied CNAMEs to the tunnel
+(`lasso-family`, docker container `cloudflared-family`, managed in Cloudflare; ingress -> `http://localhost:80`, i.e. the webapp Caddy).
+DNS for the domain lives in Cloudflare (zone `getcleanstays.com`); `send` MX (Resend) is DNS-only.
+- Caddy trusts the local tunnel hop (`trusted_proxies private_ranges`) and reads the visitor IP from `Cf-Connecting-Ip`, then sets `X-Forwarded-For` to that single IP, so the API's `trust proxy 1`, rate limits and SecurityEvent IPs stay correct. In the access log use `request.client_ip` (not `remote_ip`).
+- Caddy serves plain http for the tunnel and redirects `X-Forwarded-Proto: http` visitors to https. The https listeners remain only until the router ports are closed.
+- If the tunnel is down the site is down: the monitor watches `cloudflared-family`. Restart: `docker restart cloudflared-family`.
+- Rollback to direct access: in Cloudflare, delete the 8 CNAMEs and re-add `A` records -> the home IP (DNS only), forward router 80/443 to Lasso. Config backups: `/opt/stacks/webapp/Caddyfile.pre-cf-tunnel`, `~/.config/cloudflare/tunnel_config.backup-pre-getcleanstays.json`.
+- Cloudflare auto-injects a Web Analytics beacon into proxied pages; our CSP blocks it (console noise only). Switch it off in the dashboard (Analytics & Logs > Web Analytics) if unwanted.

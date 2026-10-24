@@ -7,7 +7,7 @@ set -uo pipefail
 . /etc/getcleanstays-watch.conf
 STATE=/var/lib/getcleanstays-watch; mkdir -p "$STATE"
 SITE=https://getcleanstays.com; API=https://api.getcleanstays.com; MCP=https://mcp.getcleanstays.com
-CONTAINERS=(webapp-api-1 webapp-client-1 webapp-mcp-1 webapp-postgres-1 webapp-caddy-1)
+CONTAINERS=(webapp-api-1 webapp-client-1 webapp-mcp-1 webapp-postgres-1 webapp-caddy-1 cloudflared-family)   # cloudflared-family = the Cloudflare tunnel that carries all public traffic
 now=$(date +%s)
 
 notify() { # title priority tags message
