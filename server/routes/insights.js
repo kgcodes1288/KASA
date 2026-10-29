@@ -17,7 +17,7 @@ async function insightsFor(listingIds, from, to, userId) {
     prisma.job.findMany({ where: { listingId: { in: listingIds }, checkoutDate: inRange }, select: { listingId: true, status: true, checkoutDate: true, updatedAt: true } }),
     prisma.maintenanceTask.findMany({
       where: { listingId: { in: listingIds }, OR: [{ isDraft: false }, { assignedByUserId: userId }] },
-      select: { listingId: true, taskType: true, isRecurring: true, paymentAmount: true, quoteStatus: true, status: true, isDraft: true, createdAt: true, updatedAt: true, lastServicedAt: true, nextDueAt: true },
+      select: { listingId: true, taskType: true, isRecurring: true, paymentAmount: true, quoteStatus: true, purchaseStatus: true, purchaseMode: true, actualAmount: true, status: true, isDraft: true, createdAt: true, updatedAt: true, lastServicedAt: true, nextDueAt: true },
     }),
     prisma.booking.findMany({ where: { listingId: { in: listingIds }, echo: false, type: 'guest', checkoutDate: inRange }, select: { listingId: true, checkinDate: true, checkoutDate: true } }),
   ]);
@@ -28,6 +28,7 @@ async function insightsFor(listingIds, from, to, userId) {
     unplanned: { raised: 0, resolved: 0, open: 0, avgDaysToResolve: null },
     invoices: { count: 0, total: 0, paid: 0, paidTotal: 0, outstanding: 0, outstandingTotal: 0, avg: 0 },
     quotes: { count: 0, approved: 0, declined: 0, pending: 0, approvedTotal: 0 },
+    purchases: { count: 0, approved: 0, declined: 0, pending: 0, cohostBought: 0, ownerOrdered: 0, total: 0 },
     openNow: 0, overdueNow: 0, _res: [],
   });
   const by = Object.fromEntries(listingIds.map((id) => [id, mk()]));
@@ -55,6 +56,14 @@ async function insightsFor(listingIds, from, to, userId) {
       const v = amt(t.paymentAmount); const x = m.invoices;
       x.count++; x.total += v; bucket(t.createdAt).invoiceTotal += v;
       if (done) { x.paid++; x.paidTotal += v; } else { x.outstanding++; x.outstandingTotal += v; }
+    } else if (t.taskType === 'PURCHASE' && created) {
+      const pu = m.purchases; pu.count++;
+      if (t.purchaseStatus === 'PENDING') pu.pending++;
+      else if (t.purchaseStatus === 'DECLINED') pu.declined++;
+      else {
+        pu.approved++; pu.total += amt(t.actualAmount || t.paymentAmount);
+        if (t.purchaseMode === 'OWNER_ORDERS') pu.ownerOrdered++; else pu.cohostBought++;
+      }
     } else if (t.taskType === 'QUOTE' && created) {
       const q = m.quotes; q.count++;
       if (t.quoteStatus === 'APPROVED') { q.approved++; q.approvedTotal += amt(t.paymentAmount); }
@@ -79,7 +88,7 @@ async function insightsFor(listingIds, from, to, userId) {
   sum.unplanned.avgDaysToResolve = resAll.length ? r2(resAll.reduce((a, b) => a + b, 0) / resAll.length) : null;
   sum.invoices.avg = sum.invoices.count ? r2(sum.invoices.total / sum.invoices.count) : 0;
   delete sum._res;
-  for (const m of [sum, ...Object.values(by)]) { m.invoices.total = r2(m.invoices.total); m.invoices.paidTotal = r2(m.invoices.paidTotal); m.invoices.outstandingTotal = r2(m.invoices.outstandingTotal); m.quotes.approvedTotal = r2(m.quotes.approvedTotal); }
+  for (const m of [sum, ...Object.values(by)]) { m.invoices.total = r2(m.invoices.total); m.invoices.paidTotal = r2(m.invoices.paidTotal); m.invoices.outstandingTotal = r2(m.invoices.outstandingTotal); m.quotes.approvedTotal = r2(m.quotes.approvedTotal); m.purchases.total = r2(m.purchases.total); }
   return { totals: sum, byListing: by, trend: Object.values(months).sort((a, b) => a.month.localeCompare(b.month)).map((x) => ({ ...x, invoiceTotal: r2(x.invoiceTotal) })) };
 }
 

@@ -627,7 +627,7 @@ export default function ListingDetail() {
   const [expandedRooms, setExpandedRooms] = useState({});
   const [togglingItem, setTogglingItem]   = useState(null);
   const [searchParams] = useSearchParams();
-  const [tab, setTab]                     = useState(searchParams.get('tab') === 'jobs' ? 'jobs' : 'spaces');
+  const [tab, setTab]                     = useState(['jobs', 'overview'].includes(searchParams.get('tab')) ? searchParams.get('tab') : 'spaces');
   const tabInitialised = useRef(false);
 
   const [coHosts, setCoHosts]                     = useState([]);
@@ -1144,7 +1144,7 @@ export default function ListingDetail() {
                       {myItems.map((item) => {
                         const isDone   = item.status === 'COMPLETED';
                         const colorSet = isDone ? MY_TASK_COLORS.done : MY_TASK_COLORS.active;
-                        const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'ACTION' ? '✅' : '🔧';
+                        const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'PURCHASE' ? '🛒' : item.taskType === 'QUOTE' ? '💬' : item.taskType === 'ACTION' ? '✅' : '🔧';
                         return (
                           <div key={`my-${item.id}`}
                             style={{ padding: '14px 18px', borderRadius: 10, ...colorSet,
@@ -1377,7 +1377,7 @@ export default function ListingDetail() {
                   const isDone   = item.status === 'COMPLETED';
                   const colorSet = isDone ? MAINT_COLORS.done : MAINT_COLORS.active;
 
-                  const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'ACTION' ? '✅' : '🔧';
+                  const taskIcon = item.taskType === 'PAYMENT_REQUEST' ? '💰' : item.taskType === 'PURCHASE' ? '🛒' : item.taskType === 'QUOTE' ? '💬' : item.taskType === 'ACTION' ? '✅' : '🔧';
 
                   return (
                     <div key={`maint-${item.id}`}

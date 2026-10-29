@@ -3,7 +3,7 @@ import api from '../api';
 import QuickTaskModal from './QuickTaskModal';
 import {
   ConflictAlert, fetchListingTasks, calendarDaysUntil, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal,
-  Chip, StatTile, SectionTitle, AttentionCard, Column, QuoteCard, DraftInvoiceCard,
+  Chip, StatTile, SectionTitle, AttentionCard, Column, QuoteCard, DraftInvoiceCard, PurchaseCard, purchaseOpen,
 } from './overviewParts';
 import DraftInvoiceModal from './DraftInvoiceModal';
 
@@ -106,6 +106,21 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     }
   };
 
+  const handlePurchase = async (task, action, body) => {
+    setBusyId(task.id);
+    try {
+      await api.post(`/maintenance/${task.id}/${action}`, body);
+      await load();
+      return true;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not update the purchase request');
+      await load();
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleSendDraft = async (task) => {
     if (!window.confirm(`Send this ${money(task.paymentAmount)} invoice to the owner? Only do this once the work is done.`)) return;
     setBusyId(task.id);
@@ -150,7 +165,13 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
     .sort((a, b) => new Date(b.decidedAt) - new Date(a.decidedAt))
     .slice(0, 4);
 
-  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
+  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && t.taskType !== 'PURCHASE' && isOpen(t)).sort(byDue);
+  const purchaseAll = tasks.filter((t) => t.taskType === 'PURCHASE');
+  const openPurchases = purchaseAll.filter(purchaseOpen).sort(byDue);
+  const recentPurchases = purchaseAll
+    .filter((t) => !purchaseOpen(t) && Date.now() - new Date(t.updatedAt) < 30 * DAY)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 4);
+  const purchases = [...openPurchases, ...recentPurchases];
   const onMyPlate = requests.filter((t) => !t.assignedUser || t.assignedUser.id === currentUser.id);
   const withOwner = requests.filter((t) => t.assignedUser && t.assignedUser.id !== currentUser.id);
 
@@ -195,6 +216,15 @@ export default function CoHostOverview({ listing, currentUser, jobs, tokenStatus
           <SectionTitle count={pendingQuotes.length}>{selfManaged ? 'Quotes to approve' : 'Quotes'}</SectionTitle>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
             {[...pendingQuotes, ...decidedQuotes].map((q) => <QuoteCard key={q.id} task={q} canDecide={selfManaged} busy={busyId === q.id} onDecide={handleDecide} />)}
+          </div>
+        </>
+      )}
+
+      {purchases.length > 0 && (
+        <>
+          <SectionTitle count={openPurchases.length}>Purchase requests</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: 12 }}>
+            {purchases.map((t) => <PurchaseCard key={t.id} task={t} role={selfManaged ? 'owner' : 'cohost'} busy={busyId === t.id} onAction={handlePurchase} />)}
           </div>
         </>
       )}

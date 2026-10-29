@@ -13,6 +13,8 @@ const TYPE_ICON = {
   TASK_ASSIGNED:      '📋',
   QUOTE_REQUESTED:    '💬',
   QUOTE_DECIDED:      '🧾',
+  PURCHASE_REQUESTED: '🛒',
+  PURCHASE_UPDATED:   '📦',
 };
 
 function timeAgo(dateStr) {

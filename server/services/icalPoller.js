@@ -126,6 +126,8 @@ function startPoller() {
       if (count) console.log(`[cleanup] removed ${count} old notification(s)`);
     } catch (err) { console.error('[cleanup]', err.message); }
   });
+  // purchase-request nudges, once a day at 16:00 UTC (9 AM Pacific in summer)
+  cron.schedule('0 16 * * *', () => require('../lib/purchaseReminders').sendPurchaseReminders().catch((e) => console.error('[purchases]', e.message)));
   cron.schedule('0 */12 * * *', async () => {
     console.log('[iCal] Running 12-hour sync...');
     try {

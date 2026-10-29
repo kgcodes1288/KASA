@@ -136,6 +136,15 @@ model MaintenanceTask {
   decidedAt        DateTime?
   isDraft          Boolean    @default(false)
   sourceQuoteId    String?
+  // purchase requests (taskType PURCHASE): what to buy, who buys it, and where it is in its life
+  purchaseItems      Json?      // [{ name, qty, price?, link? }]
+  purchaseMode       String?    // COHOST_BUYS (co-host buys, gets reimbursed) | OWNER_ORDERS (owner orders and ships it)
+  purchaseStatus     String?    // PENDING | APPROVED | DECLINED | ORDERED | PURCHASED | RECEIVED | ISSUE
+  deliveryAddress    String?
+  orderInfo          Json?      // { store?, orderNumber?, trackingUrl?, eta? } filled in by the owner
+  actualAmount       String?
+  statusNote         String?    // co-host's note when something arrived wrong / didn't arrive
+  purchaseReminderAt DateTime?
   attachments      String[]   @default([])
   lastServicedAt   DateTime?
   nextDueAt        DateTime
@@ -166,6 +175,7 @@ enum TaskType {
   ACTION
   PAYMENT_REQUEST
   QUOTE
+  PURCHASE
 }
 
 enum QuoteStatus {
@@ -288,6 +298,8 @@ enum NotifType {
   TASK_ASSIGNED
   QUOTE_REQUESTED
   QUOTE_DECIDED
+  PURCHASE_REQUESTED
+  PURCHASE_UPDATED
 }
 
 // One booking-site calendar (iCal link) for a listing: Airbnb, VRBO, Booking.com ... up to 3 per listing
