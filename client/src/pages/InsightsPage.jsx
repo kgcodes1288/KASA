@@ -39,8 +39,8 @@ export default function InsightsPage() {
   const toggle = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   const csv = () => {
-    const rows = [['Property', 'Stays', 'Nights', 'Cleans scheduled', 'Cleans done', 'Maintenance done', 'Maintenance overdue', 'Unplanned raised', 'Unplanned resolved', 'Unplanned open', 'Invoices', 'Invoiced $', 'Paid $', 'Outstanding $', 'Quotes', 'Quotes approved $', 'Needs attention now']];
-    const line = (n, m) => [n, m.stays, m.nights, m.planned.cleans, m.planned.cleansDone, m.planned.maintenanceDone, m.planned.maintenanceOverdue, m.unplanned.raised, m.unplanned.resolved, m.unplanned.open, m.invoices.count, m.invoices.total, m.invoices.paidTotal, m.invoices.outstandingTotal, m.quotes.count, m.quotes.approvedTotal, m.openNow];
+    const rows = [['Property', 'Stays', 'Nights', 'Cleans scheduled', 'Cleans done', 'Maintenance done', 'Maintenance overdue', 'Unplanned raised', 'Unplanned resolved', 'Unplanned open', 'Invoices', 'Invoiced $', 'Paid $', 'Outstanding $', 'Quotes', 'Quotes approved $', 'Purchases', 'Purchases approved $', 'Needs attention now']];
+    const line = (n, m) => [n, m.stays, m.nights, m.planned.cleans, m.planned.cleansDone, m.planned.maintenanceDone, m.planned.maintenanceOverdue, m.unplanned.raised, m.unplanned.resolved, m.unplanned.open, m.invoices.count, m.invoices.total, m.invoices.paidTotal, m.invoices.outstandingTotal, m.quotes.count, m.quotes.approvedTotal, m.purchases.count, m.purchases.total, m.openNow];
     data.selected.forEach((id) => rows.push(line(names[id], data.byListing[id])));
     rows.push(line('ALL SELECTED', data.totals));
     const text = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -84,6 +84,7 @@ export default function InsightsPage() {
             <Stat icon="🚨" label="Unplanned work" value={t.unplanned.raised} sub={`${t.unplanned.resolved} resolved · ${t.unplanned.open} open${t.unplanned.avgDaysToResolve != null ? ` · ${t.unplanned.avgDaysToResolve}d avg to fix` : ''}`} tone="#d97706" />
             <Stat icon="🧾" label="Invoices" value={t.invoices.count} sub={`${money(t.invoices.total)} total · avg ${money(t.invoices.avg)}`} tone="#7c3aed" />
             <Stat icon="💳" label="Outstanding invoices" value={money(t.invoices.outstandingTotal)} sub={`${t.invoices.outstanding} unpaid · ${money(t.invoices.paidTotal)} paid`} tone={t.invoices.outstanding ? '#d97706' : '#16a34a'} />
+            <Stat icon="🛒" label="Purchases" value={t.purchases.count} sub={`${t.purchases.approved} approved (${money(t.purchases.total)}) · ${t.purchases.pending} waiting · ${t.purchases.ownerOrdered} ordered by owner`} tone="#0d9488" />
             <Stat icon="📝" label="Quotes" value={t.quotes.count} sub={`${t.quotes.approved} approved (${money(t.quotes.approvedTotal)}) · ${t.quotes.declined} declined · ${t.quotes.pending} waiting`} tone="#0891b2" />
           </div>
 
@@ -128,7 +129,7 @@ export default function InsightsPage() {
             </table>
           </div>
           <p style={{ fontSize: 12, color: 'var(--ink-ghost)', marginTop: 12 }}>
-            Planned = checkout cleans and recurring maintenance. Unplanned = one-off action items and quotes that came up (repairs). Invoice and quote counts use the date they were created; “needs attention” is live and ignores the date range.
+            Planned = checkout cleans and recurring maintenance. Unplanned = one-off action items and quotes that came up (repairs). Purchases are counted on their own. Invoice and quote counts use the date they were created; “needs attention” is live and ignores the date range.
           </p>
         </>
       )}

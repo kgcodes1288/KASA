@@ -13,6 +13,8 @@ const EMAIL_SUBJECT = {
   TASK_ASSIGNED:       'A task has been assigned to you',
   QUOTE_REQUESTED:     'A quote needs your approval',
   QUOTE_DECIDED:       'Your quote has been answered',
+  PURCHASE_REQUESTED:  'A purchase request needs your approval',
+  PURCHASE_UPDATED:    'Update on a purchase request',
   MCP_APPROVAL:        'Your assistant needs your approval',
 };
 
@@ -34,7 +36,7 @@ async function notify(userId, type, title, message, listingId = null, opts = {})
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true, emailUnsubscribed: true, unsubscribeToken: true } });
     if (user?.email && !user.emailUnsubscribed) {
       // quotes and invoices are answered on the overview; everything else lives under Jobs
-      const tab = opts.tab || (String(type).startsWith('QUOTE') ? 'overview' : 'jobs');
+      const tab = opts.tab || (/^(QUOTE|PURCHASE)/.test(String(type)) ? 'overview' : 'jobs');
       const actionUrl = listingId ? `${APP_URL}/listings/${listingId}?tab=${tab}` : `${APP_URL}/account`;
       await sendNotificationEmail({
         to:               user.email,

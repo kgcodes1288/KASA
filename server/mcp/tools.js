@@ -20,7 +20,7 @@ const flattenTasks = (rooms) => rooms.flatMap((r) =>
 const shapeTask = (t) => ({
   id: t.id,
   title: t.title,
-  type: t.taskType,                       // MAINTENANCE | ACTION | PAYMENT_REQUEST | QUOTE
+  type: t.taskType,                       // MAINTENANCE | ACTION | PAYMENT_REQUEST | QUOTE | PURCHASE
   amount: t.paymentAmount ? money(t.paymentAmount) : undefined,
   notes: t.notes || undefined,
   due: dayKey(t.nextDueAt),
@@ -31,6 +31,16 @@ const shapeTask = (t) => ({
   quoteStatus: t.quoteStatus || undefined,
   decisionNote: t.decisionNote || undefined,
   isDraftInvoice: t.isDraft || undefined,
+  ...(t.taskType === 'PURCHASE' && {
+    items: t.purchaseItems || [],
+    whoBuys: t.purchaseMode === 'OWNER_ORDERS' ? 'owner orders it' : 'co-host buys it',
+    purchaseStatus: t.purchaseStatus,
+    deliverTo: t.deliveryAddress || undefined,
+    order: t.orderInfo && Object.keys(t.orderInfo).length ? t.orderInfo : undefined,
+    amountPaid: t.actualAmount ? money(t.actualAmount) : undefined,
+    problem: t.purchaseStatus === 'ISSUE' ? t.statusNote : undefined,
+    neededBy: dayKey(t.nextDueAt),
+  }),
   room: t.roomName || undefined,
   assignedTo: t.assignedUser?.name,
   from: t.assignedBy?.name,
@@ -180,6 +190,7 @@ function registerTools(server, ctx) {
         })),
         maintenanceDue: open.filter((t) => t.taskType === 'MAINTENANCE').map(shapeTask),
         quotesAwaitingApproval: tasks.filter((t) => t.taskType === 'QUOTE' && t.quoteStatus === 'PENDING').map(shapeTask),
+        openPurchaseRequests: tasks.filter((t) => t.taskType === 'PURCHASE' && ['PENDING', 'APPROVED', 'ORDERED', 'ISSUE'].includes(t.purchaseStatus)).map(shapeTask),
         openTasks: open.filter((t) => t.taskType === 'ACTION' || t.taskType === 'PAYMENT_REQUEST').map(shapeTask),
         draftInvoices: tasks.filter((t) => t.isDraft).map(shapeTask),
       });
@@ -220,10 +231,10 @@ function registerTools(server, ctx) {
 
   def('list_tasks', {
     title: 'List tasks, maintenance, quotes & invoices',
-    description: 'Tasks for one property. kind: maintenance (recurring upkeep), requests (actions & payment requests between owner and co-host), quotes, drafts (the co-host\'s draft invoices), or all. Completed items are hidden unless includeCompleted.',
+    description: 'Tasks for one property. kind: maintenance (recurring upkeep), requests (actions & payment requests between owner and co-host), quotes, purchases (purchase requests), drafts (the co-host\'s draft invoices), or all. Completed items are hidden unless includeCompleted.',
     input: {
       listingId,
-      kind: z.enum(['all', 'maintenance', 'requests', 'quotes', 'drafts']).optional(),
+      kind: z.enum(['all', 'maintenance', 'requests', 'quotes', 'purchases', 'drafts']).optional(),
       includeCompleted: z.boolean().optional(),
     },
   }, {}, async ({ listingId: lid, kind = 'all', includeCompleted }) => {
@@ -233,10 +244,11 @@ function registerTools(server, ctx) {
       if (t.isDraft) return kind === 'all';
       if (kind === 'maintenance') return t.taskType === 'MAINTENANCE';
       if (kind === 'quotes') return t.taskType === 'QUOTE';
+      if (kind === 'purchases') return t.taskType === 'PURCHASE';
       if (kind === 'requests') return t.taskType === 'ACTION' || t.taskType === 'PAYMENT_REQUEST';
       return true;
     });
-    if (!includeCompleted) tasks = tasks.filter((t) => t.taskType === 'QUOTE' ? t.quoteStatus === 'PENDING' : t.isDraft || isOpen(t) || (t.isRecurring && t.taskType === 'MAINTENANCE'));
+    if (!includeCompleted) tasks = tasks.filter((t) => t.taskType === 'PURCHASE' ? ['PENDING', 'APPROVED', 'ORDERED', 'ISSUE'].includes(t.purchaseStatus) : t.taskType === 'QUOTE' ? t.quoteStatus === 'PENDING' : t.isDraft || isOpen(t) || (t.isRecurring && t.taskType === 'MAINTENANCE'));
     return tasks.sort((a, b) => new Date(a.nextDueAt) - new Date(b.nextDueAt)).map(shapeTask);
   });
 
@@ -441,6 +453,76 @@ function registerTools(server, ctx) {
       return `SEND the invoice "${t.title}" for ${money(t.paymentAmount)} to the owner. Only do this if the work is finished.`;
     },
   }, async ({ taskId }) => shapeTask(await api('POST', `/maintenance/${taskId}/send`)));
+
+  // ───────────────────── PURCHASE REQUESTS (money) ─────────────────────
+  const itemsText = (items) => items.map((i) => `${i.qty > 1 ? `${i.qty} × ` : ''}${i.name}${i.price ? ` (${money(i.price)}${i.qty > 1 ? ' each' : ''})` : ''}`).join(', ');
+  const item = z.object({ name: z.string(), qty: z.number().int().min(1).max(99).optional(), price: z.number().positive().optional().describe('Price each, if known'), link: z.string().optional().describe('Store link') });
+
+  def('request_purchase', {
+    title: 'Ask the owner to approve a purchase',
+    description: 'Co-host asks the owner to approve buying items for the property (towels, a kettle, batteries…). whoBuys: "cohost" = the co-host buys it and is reimbursed after marking it purchased; "owner" = the owner orders it and has it delivered (deliverTo: an address, or "property" for the listing address).',
+    input: { listingId, items: z.array(item).min(1).max(20), whoBuys: z.enum(['cohost', 'owner']), deliverTo: z.string().optional(), neededBy: z.string().describe('YYYY-MM-DD'), notes: z.string().optional().describe('Why it is needed, size, colour, brand'), title: z.string().optional() },
+  }, {
+    write: true,
+    confirm: async ({ listingId: lid, items, whoBuys, deliverTo, neededBy }) => {
+      const l = await api('GET', `/listings/${lid}`);
+      return `SEND A PURCHASE REQUEST to ${l.host?.name || 'the owner'}: ${itemsText(items)}; ${whoBuys === 'owner' ? `the owner orders it and ships it to ${!deliverTo || deliverTo === 'property' ? (l.address || 'the property') : deliverTo}` : 'you buy it and get reimbursed'}; needed by ${neededBy}.`;
+    },
+  }, async (a) => {
+    const l = await api('GET', `/listings/${a.listingId}`);
+    const names = a.items.map((i) => i.name);
+    return shapeTask(await api('POST', `/listings/${a.listingId}/maintenance`, {
+      taskType: 'PURCHASE', title: a.title || (names.length > 2 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(' and ')),
+      notes: a.notes || null, nextDueAt: a.neededBy, isRecurring: false,
+      purchaseItems: a.items.map((i) => ({ name: i.name, qty: i.qty || 1, price: i.price !== undefined ? String(i.price) : null, link: i.link || null })),
+      purchaseMode: a.whoBuys === 'owner' ? 'OWNER_ORDERS' : 'COHOST_BUYS',
+      deliveryAddress: a.whoBuys === 'owner' ? (!a.deliverTo || a.deliverTo === 'property' ? l.address : a.deliverTo) : null,
+    }));
+  });
+
+  def('decide_purchase', {
+    title: 'Approve or decline a purchase request',
+    description: 'Owner approves or declines a pending purchase request (ids from list_tasks kind=purchases). The owner may change who buys it with whoBuys.',
+    input: { listingId, taskId: z.string(), decision: z.enum(['APPROVED', 'DECLINED']), whoBuys: z.enum(['cohost', 'owner']).optional(), note: z.string().optional() },
+  }, {
+    write: true,
+    confirm: async ({ listingId: lid, taskId, decision, whoBuys, note }) => {
+      const t = await getTask(lid, taskId);
+      return `${decision === 'APPROVED' ? 'APPROVE' : 'DECLINE'} the purchase request "${t.title}"${t.paymentAmount ? ` (about ${money(t.paymentAmount)})` : ''} from ${t.assignedBy?.name || 'the co-host'}${decision === 'APPROVED' && whoBuys ? `; ${whoBuys === 'owner' ? 'you will order it' : 'the co-host buys it'}` : ''}${note ? ` (note: "${note}")` : ''}.`;
+    },
+  }, async ({ taskId, decision, whoBuys, note }) => shapeTask(await api('POST', `/maintenance/${taskId}/purchase-decision`, {
+    decision, note, ...(whoBuys && { purchaseMode: whoBuys === 'owner' ? 'OWNER_ORDERS' : 'COHOST_BUYS' }),
+  })));
+
+  def('mark_purchase_ordered', {
+    title: 'Mark a purchase as ordered',
+    description: 'Owner says an approved purchase has been ordered (store, order number, tracking link, expected delivery YYYY-MM-DD are optional). The co-host is notified.',
+    input: { listingId, taskId: z.string(), store: z.string().optional(), orderNumber: z.string().optional(), trackingUrl: z.string().optional(), expectedDelivery: z.string().optional() },
+  }, {
+    write: true,
+    confirm: async ({ listingId: lid, taskId, store, expectedDelivery }) => {
+      const t = await getTask(lid, taskId);
+      return `TELL ${t.assignedBy?.name || 'the co-host'} that "${t.title}" has been ordered${store ? ` from ${store}` : ''}${expectedDelivery ? `, expected ${expectedDelivery}` : ''}.`;
+    },
+  }, async ({ taskId, store, orderNumber, trackingUrl, expectedDelivery }) => shapeTask(await api('POST', `/maintenance/${taskId}/ordered`, { store, orderNumber, trackingUrl, eta: expectedDelivery })));
+
+  def('mark_purchased', {
+    title: 'Mark a purchase as bought (request reimbursement)',
+    description: 'Co-host says they bought an approved purchase and what they paid. This sends the owner a reimbursement invoice. Receipts can be attached in the CleanStay app.',
+    input: { listingId, taskId: z.string(), amountPaid: z.number().positive() },
+  }, {
+    write: true,
+    confirm: async ({ listingId: lid, taskId, amountPaid }) => {
+      const t = await getTask(lid, taskId);
+      return `MARK "${t.title}" AS BOUGHT and SEND ${t.assignedUser?.name || 'the owner'} a reimbursement invoice for ${money(amountPaid)}.`;
+    },
+  }, async ({ taskId, amountPaid }) => shapeTask(await api('POST', `/maintenance/${taskId}/purchased`, { actualAmount: String(amountPaid), attachments: [] })));
+
+  def('mark_purchase_received', {
+    title: 'Confirm a delivery (or report a problem)',
+    description: 'Co-host confirms an ordered purchase arrived (received=true), or reports a problem (received=false with a note). The owner is notified.',
+    input: { listingId, taskId: z.string(), received: z.boolean(), note: z.string().optional() },
+  }, { write: true }, async ({ taskId, received, note }) => shapeTask(await api('POST', `/maintenance/${taskId}/received`, { ok: received, note })));
 }
 
 module.exports = { registerTools };

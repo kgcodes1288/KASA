@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
 import QuickTaskModal from './QuickTaskModal';
-import { ConflictAlert, fetchListingTasks, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal, StatTile, SectionTitle, AttentionCard, Column, QuoteCard } from './overviewParts';
+import { ConflictAlert, fetchListingTasks, SOON_DAYS, DAY, daysUntil, isOpen, money, quoteTotal, StatTile, SectionTitle, AttentionCard, Column, QuoteCard, PurchaseCard, purchaseOpen } from './overviewParts';
 
 // Overview shown to an owner whose listing is run by a co-host: what needs the
 // owner's attention (due maintenance) and the tasks passing between owner and co-host.
@@ -28,6 +28,21 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
     }
   };
 
+  const handlePurchase = async (task, action, body) => {
+    setBusyId(task.id);
+    try {
+      await api.post(`/maintenance/${task.id}/${action}`, body);
+      await load();
+      return true;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not update the purchase request');
+      await load();
+      return false;
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleDone = async (task) => {
     setBusyId(task.id);
     try {
@@ -44,13 +59,20 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
 
   const byDue = (a, b) => new Date(a.nextDueAt) - new Date(b.nextDueAt);
   const maintenance = tasks.filter((t) => !t.isDraft && t.taskType === 'MAINTENANCE' && isOpen(t)).sort(byDue);
-  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && isOpen(t)).sort(byDue);
+  const requests = tasks.filter((t) => !t.isDraft && t.taskType !== 'MAINTENANCE' && t.taskType !== 'QUOTE' && t.taskType !== 'PURCHASE' && isOpen(t)).sort(byDue);
   const quotes = tasks.filter((t) => t.taskType === 'QUOTE');
   const pendingQuotes = quotes.filter((t) => t.quoteStatus === 'PENDING').sort(byDue);
   const decidedQuotes = quotes
     .filter((t) => t.quoteStatus !== 'PENDING' && t.decidedAt && Date.now() - new Date(t.decidedAt) < 30 * DAY)
     .sort((a, b) => new Date(b.decidedAt) - new Date(a.decidedAt))
     .slice(0, 4);
+  const purchaseAll = tasks.filter((t) => t.taskType === 'PURCHASE');
+  const openPurchases = purchaseAll.filter(purchaseOpen).sort(byDue);
+  const recentPurchases = purchaseAll
+    .filter((t) => !purchaseOpen(t) && Date.now() - new Date(t.updatedAt) < 30 * DAY)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 4);
+  const purchases = [...openPurchases, ...recentPurchases];
+  const ownerTodo = openPurchases.filter((t) => t.purchaseStatus === 'PENDING' || (t.purchaseMode === 'OWNER_ORDERS' && ['APPROVED', 'ISSUE'].includes(t.purchaseStatus)));
   const onMyPlate = requests.filter((t) => !t.assignedUser || t.assignedUser.id === currentUser.id);
   const withCoHost = requests.filter((t) => t.assignedUser && t.assignedUser.id !== currentUser.id);
 
@@ -77,6 +99,7 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
         <StatTile icon="⚠️" label="Overdue" value={overdue} hint={overdue ? 'Needs action' : 'Nothing late'} accent="var(--red)" />
         <StatTile icon="⏰" label="Due in 30 days" value={dueSoon} hint="Maintenance" accent="var(--amber)" />
         <StatTile icon="💬" label="Quotes" value={pendingQuotes.length} hint={pendingQuotes.length ? `${money(quoteTotal(pendingQuotes))} total` : 'To approve'} accent="var(--amber)" />
+        <StatTile icon="🛒" label="Purchases" value={ownerTodo.length} hint={ownerTodo.length ? 'Approve or order' : 'Nothing waiting'} accent="var(--amber)" />
         <StatTile icon="📝" label="Your plate" value={onMyPlate.length} hint="Waiting on you" accent="var(--teal)" />
         <StatTile icon="🤝" label="With co-host" value={withCoHost.length} hint="Handed off" accent="var(--ink-ghost)" />
       </div>
@@ -88,6 +111,15 @@ export default function HostOverview({ listing, currentUser, canWrite }) {
             {[...pendingQuotes, ...decidedQuotes].map((q) => (
               <QuoteCard key={q.id} task={q} canDecide busy={busyId === q.id} onDecide={handleDecide} />
             ))}
+          </div>
+        </>
+      )}
+
+      {purchases.length > 0 && (
+        <>
+          <SectionTitle count={openPurchases.length}>Purchase requests</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))', gap: 12 }}>
+            {purchases.map((t) => <PurchaseCard key={t.id} task={t} role="owner" busy={busyId === t.id} onAction={handlePurchase} />)}
           </div>
         </>
       )}

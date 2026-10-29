@@ -7,7 +7,8 @@ const rl = require('../lib/rateLimit');
 const fmtMoney = (v) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? `$${n.toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}` : ''; };
 
 // ── input rules ───────────────────────────────────────────────────────────────
-const TASK_TYPES = ['MAINTENANCE', 'ACTION', 'PAYMENT_REQUEST', 'QUOTE'];
+const TASK_TYPES = ['MAINTENANCE', 'ACTION', 'PAYMENT_REQUEST', 'QUOTE', 'PURCHASE'];
+const P = require('../lib/purchase');
 const validDate = (v) => v && !Number.isNaN(new Date(v).getTime());
 // money as typed ("$1,200.50") -> "1200.50"; null when it is not a sensible amount
 function cleanAmount(v) {
@@ -132,6 +133,22 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'That room is not part of this property' });
 
     const isQuote = taskType === 'QUOTE';
+    const isPurchase = taskType === 'PURCHASE';
+    let purchase = null;
+    if (isPurchase) {
+      const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
+      if (req.user.id === listing.hostId)
+        return res.status(400).json({ message: 'Purchase requests are sent by a co-host to the owner' });
+      const items = P.cleanItems(req.body.purchaseItems);
+      if (items.error) return res.status(400).json({ message: items.error });
+      const mode = req.body.purchaseMode || 'COHOST_BUYS';
+      if (!P.MODES.includes(mode)) return res.status(400).json({ message: 'Choose who buys it' });
+      const addr = req.body.deliveryAddress ? String(req.body.deliveryAddress).trim() : '';
+      if (addr.length > 300) return res.status(400).json({ message: 'The delivery address must be 300 characters or fewer' });
+      if (mode === 'OWNER_ORDERS' && !addr) return res.status(400).json({ message: 'Where should it be delivered?' });
+      const total = P.itemsTotal(items.value);
+      purchase = { items: items.value, mode, addr: addr || null, total, listing };
+    }
     if (isQuote) {
       const listing = await prisma.listing.findUnique({ where: { id: req.params.id } });
       if (!amt.value) return res.status(400).json({ message: 'A quote needs an amount' });
@@ -141,7 +158,7 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         return res.status(400).json({ message: 'Only a co-host can send a quote to the owner' });
     }
 
-    const recurring = !isQuote && isRecurring !== false;
+    const recurring = !isQuote && !isPurchase && isRecurring !== false;
     if (recurring && !(Number.isInteger(Number(intervalMonths)) && Number(intervalMonths) >= 1 && Number(intervalMonths) <= 120))
       return res.status(400).json({ message: 'Repeat interval must be between 1 and 120 months' });
 
@@ -152,14 +169,15 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         intervalMonths: recurring ? parseInt(intervalMonths) : 0,
         isRecurring: recurring,
         taskType: taskType || 'MAINTENANCE',
-        paymentAmount: amt.value,
+        paymentAmount: isPurchase ? (purchase.total !== null ? String(purchase.total) : null) : amt.value,
         ...(isQuote && { quoteStatus: 'PENDING' }),
+        ...(isPurchase && { purchaseItems: purchase.items, purchaseMode: purchase.mode, purchaseStatus: 'PENDING', deliveryAddress: purchase.addr }),
         attachments: att.value,
         lastServicedAt: lastServicedAt ? new Date(lastServicedAt) : null,
         nextDueAt: new Date(nextDueAt),
         listingId: req.params.id,
         roomId: roomId || null,
-        assignedUserId: assignedUserId || null,
+        assignedUserId: isPurchase ? purchase.listing.hostId : assignedUserId || null,
         assignedByUserId: req.user.id,
       },
       include: {
@@ -167,6 +185,16 @@ listingRouter.post('/:id/maintenance', authenticate, async (req, res) => {
         listing: { select: { name: true } },
       },
     });
+
+    if (isPurchase) {
+      const what = P.itemsSummary(purchase.items);
+      await notify(
+        purchase.listing.hostId, 'PURCHASE_REQUESTED', 'Purchase request needs your approval',
+        `${req.user.name} asked to ${purchase.mode === 'OWNER_ORDERS' ? 'have you order' : 'buy'} ${what}${purchase.total !== null ? ` (about ${P.fmtMoney(purchase.total)})` : ''} for ${task.listing.name}`,
+        req.params.id, { tab: 'overview' }
+      );
+      return res.status(201).json(task);
+    }
 
     // Notify assigned user if different from creator
     if (assignedUserId && assignedUserId !== req.user.id) {
@@ -200,6 +228,8 @@ taskRouter.patch('/:taskId/complete', authenticate, async (req, res) => {
     if (!canWrite) return res.status(403).json({ message: 'Forbidden' });
     if (task.taskType === 'QUOTE')
       return res.status(400).json({ message: 'Quotes are approved or declined, not completed' });
+    if (task.taskType === 'PURCHASE')
+      return res.status(400).json({ message: 'Purchase requests move on with Approve, Ordered, Purchased or Received' });
     if (task.isDraft)
       return res.status(400).json({ message: 'Send this draft invoice first' });
 
@@ -359,6 +389,123 @@ taskRouter.post('/:taskId/decision', authenticate, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+// ── Purchase requests ─────────────────────────────────────────────────────────
+const purchaseInclude = { assignedUser: { select: { id: true, name: true } }, assignedBy: { select: { id: true, name: true } } };
+async function loadPurchase(req, res) {
+  const task = await prisma.maintenanceTask.findUnique({ where: { id: req.params.taskId }, include: { listing: true } });
+  if (!task || task.taskType !== 'PURCHASE') { res.status(404).json({ message: 'Purchase request not found' }); return null; }
+  return task;
+}
+const tellCoHost = (task, title, msg) => (task.assignedByUserId
+  ? notify(task.assignedByUserId, 'PURCHASE_UPDATED', title, msg, task.listingId, { tab: 'overview' }) : Promise.resolve());
+const tellOwner = (task, title, msg) => notify(task.listing.hostId, 'PURCHASE_UPDATED', title, msg, task.listingId, { tab: 'overview' });
+
+// POST /api/maintenance/:taskId/purchase-decision — owner approves (optionally changing who buys) or declines
+taskRouter.post('/:taskId/purchase-decision', authenticate, async (req, res) => {
+  try {
+    const task = await loadPurchase(req, res); if (!task) return;
+    if (task.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Only the listing owner can approve or decline a purchase' });
+    if (task.purchaseStatus !== 'PENDING') return res.status(409).json({ message: `This request was already ${String(task.purchaseStatus).toLowerCase()}` });
+    const { decision, note } = req.body;
+    if (!['APPROVED', 'DECLINED'].includes(decision)) return res.status(400).json({ message: 'decision must be APPROVED or DECLINED' });
+    if (note && String(note).length > 500) return res.status(400).json({ message: 'Note must be 500 characters or fewer' });
+    const mode = req.body.purchaseMode || task.purchaseMode;
+    if (!P.MODES.includes(mode)) return res.status(400).json({ message: 'Choose who buys it' });
+    let addr = task.deliveryAddress;
+    if (req.body.deliveryAddress !== undefined) addr = String(req.body.deliveryAddress || '').trim().slice(0, 300) || null;
+    if (decision === 'APPROVED' && mode === 'OWNER_ORDERS' && !addr) addr = task.listing.address || null;
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id },
+      data: {
+        purchaseStatus: decision, purchaseMode: mode, deliveryAddress: addr,
+        decisionNote: note?.trim() || null, decidedAt: new Date(), purchaseReminderAt: null,
+        ...(decision === 'DECLINED' && { status: 'COMPLETED' }),
+      },
+      include: purchaseInclude,
+    });
+    const what = P.itemsSummary(task.purchaseItems);
+    const how = decision === 'DECLINED' ? '' : mode === 'OWNER_ORDERS' ? ` ${req.user.name} will order it${addr ? ` and ship it to ${addr}` : ''}.` : ' Go ahead and buy it, then mark it purchased with the receipt to get reimbursed.';
+    await tellCoHost(task, `Purchase ${decision === 'APPROVED' ? 'approved' : 'declined'}`,
+      `${req.user.name} ${decision.toLowerCase()} your request for ${what} at ${task.listing.name}${note?.trim() ? `: "${note.trim()}"` : '.'}${how}`);
+    res.json(updated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// POST /api/maintenance/:taskId/ordered — owner placed the order
+taskRouter.post('/:taskId/ordered', authenticate, async (req, res) => {
+  try {
+    const task = await loadPurchase(req, res); if (!task) return;
+    if (task.listing.hostId !== req.user.id) return res.status(403).json({ message: 'Only the listing owner can mark this ordered' });
+    if (task.purchaseMode !== 'OWNER_ORDERS' || !['APPROVED', 'ISSUE'].includes(task.purchaseStatus)) return res.status(409).json({ message: 'This request is not waiting to be ordered' });
+    const info = P.cleanOrderInfo(req.body);
+    if (info.error) return res.status(400).json({ message: info.error });
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id }, data: { purchaseStatus: 'ORDERED', orderInfo: info.value, purchaseReminderAt: null }, include: purchaseInclude,
+    });
+    const o = info.value;
+    await tellCoHost(task, 'Your purchase was ordered',
+      `${req.user.name} ordered ${P.itemsSummary(task.purchaseItems)} for ${task.listing.name}${o.store ? ` from ${o.store}` : ''}${o.eta ? `, expected ${new Date(o.eta + 'T12:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}. Mark it received when it arrives.`);
+    res.json(updated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// POST /api/maintenance/:taskId/purchased — the co-host bought it; files a reimbursement invoice to the owner
+taskRouter.post('/:taskId/purchased', authenticate, async (req, res) => {
+  try {
+    const task = await loadPurchase(req, res); if (!task) return;
+    if (task.assignedByUserId !== req.user.id) return res.status(403).json({ message: 'Only the co-host who asked can mark this purchased' });
+    if (task.purchaseMode !== 'COHOST_BUYS' || task.purchaseStatus !== 'APPROVED') return res.status(409).json({ message: 'This request is not waiting to be bought' });
+    const amt = cleanAmount(req.body.actualAmount);
+    if (amt.error || !amt.value) return res.status(400).json({ message: amt.error || 'Enter what you paid' });
+    const att = cleanAttachments(req.body.attachments);
+    if (att.error) return res.status(400).json({ message: att.error });
+    const what = P.itemsSummary(task.purchaseItems);
+    const [updated] = await prisma.$transaction([
+      prisma.maintenanceTask.update({
+        where: { id: task.id },
+        data: { purchaseStatus: 'PURCHASED', status: 'COMPLETED', actualAmount: amt.value, lastServicedAt: new Date(), attachments: [...(task.attachments || []), ...att.value].slice(0, 10) },
+        include: purchaseInclude,
+      }),
+      prisma.maintenanceTask.create({
+        data: {
+          title: `Reimburse: ${task.title}`.slice(0, 120),
+          notes: `Purchase approved ${task.decidedAt ? new Date(task.decidedAt).toLocaleDateString('en-US') : ''}: ${what}.${P.toNum(task.paymentAmount) !== null ? ` Estimate was ${P.fmtMoney(P.toNum(task.paymentAmount))}.` : ''}`.trim(),
+          taskType: 'PAYMENT_REQUEST', paymentAmount: amt.value, attachments: att.value,
+          isRecurring: false, intervalMonths: 0, sourceQuoteId: task.id,
+          nextDueAt: new Date(Date.now() + 14 * 86400000),
+          listingId: task.listingId, assignedUserId: task.listing.hostId, assignedByUserId: req.user.id,
+        },
+      }),
+    ]);
+    await tellOwner(task, 'Reimbursement requested',
+      `${req.user.name} bought ${what} for ${task.listing.name} and asked to be reimbursed ${P.fmtMoney(P.toNum(amt.value))}${att.value.length ? ' (receipt attached)' : ''}.`);
+    res.json(updated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// POST /api/maintenance/:taskId/received — the delivery arrived, or there's a problem with it
+taskRouter.post('/:taskId/received', authenticate, async (req, res) => {
+  try {
+    const task = await loadPurchase(req, res); if (!task) return;
+    const { canWrite } = await getAccess(task.listingId, req.user.id);
+    if (!canWrite || task.listing.hostId === req.user.id) return res.status(403).json({ message: 'The co-host confirms deliveries' });
+    if (!['ORDERED', 'ISSUE'].includes(task.purchaseStatus)) return res.status(409).json({ message: 'This request has not been ordered yet' });
+    const ok = req.body.ok !== false;
+    const note = req.body.note ? String(req.body.note).trim() : '';
+    if (note.length > 500) return res.status(400).json({ message: 'Note must be 500 characters or fewer' });
+    if (!ok && !note) return res.status(400).json({ message: 'Say what went wrong, so the owner can sort it out' });
+    const updated = await prisma.maintenanceTask.update({
+      where: { id: task.id },
+      data: ok ? { purchaseStatus: 'RECEIVED', status: 'COMPLETED', lastServicedAt: new Date(), statusNote: note || null }
+               : { purchaseStatus: 'ISSUE', statusNote: note },
+      include: purchaseInclude,
+    });
+    await tellOwner(task, ok ? 'Delivery received' : 'Problem with a delivery',
+      ok ? `${req.user.name} received ${P.itemsSummary(task.purchaseItems)} at ${task.listing.name}.` : `${req.user.name} reported a problem with ${P.itemsSummary(task.purchaseItems)} for ${task.listing.name}: "${note}"`);
+    res.json(updated);
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // POST /api/maintenance/:taskId/assign
