@@ -18,7 +18,7 @@ Everything runs on the home server "Lasso". Prod = `/opt/stacks/webapp`, staging
 - Uploaded task photos live in Cloudinary (not on Lasso).
 
 ## Monitoring (installed 2026-10-12)
-- `getcleanstays-watch.timer` runs `/usr/local/bin/getcleanstays-watch.sh` every minute (source: `ops/` in this repo; topic in `/etc/getcleanstays-watch.conf`).
+- `getcleanstays-watch.timer` runs `/usr/local/bin/getcleanstays-watch.sh` every 5 minutes (alerts after 2 failed runs, about 10 min; Lasso-wide outages are also caught by the Cloudflare `lasso-uptime` Worker, see ~/failover/README.md) (source: `ops/` in this repo; topic in `/etc/getcleanstays-watch.conf`).
 - It checks the website, `/api/health?deep=1` (proves the database answers), the AI connector, the 5 prod containers (and restarts),
   TLS expiry (<14 days), disk (85%/92%), and the API log for real errors (unhandled errors, failed emails/texts, database errors).
 - Phone alerts go to the same private ntfy topic as the backup and temperature alerts: DOWN after 2 failed minutes, RECOVERED when fixed.

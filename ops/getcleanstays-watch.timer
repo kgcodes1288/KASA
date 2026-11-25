@@ -1,9 +1,9 @@
 [Unit]
-Description=Run the GetCleanStays check every minute
+Description=Run the GetCleanStays check every 5 minutes
 
 [Timer]
 OnBootSec=90
-OnUnitActiveSec=60
+OnUnitActiveSec=300
 AccuracySec=5s
 
 [Install]

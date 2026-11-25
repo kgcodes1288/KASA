@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# GetCleanStays uptime + error monitor. Runs every minute from a systemd timer (see getcleanstays-watch.timer).
-# Pushes alerts to the owner's phone through ntfy. An alert is sent when a check fails twice in a row (2 min), and again when it recovers.
+# GetCleanStays uptime + error monitor. Runs every 5 minutes from a systemd timer (see getcleanstays-watch.timer).
+# Pushes alerts to the owner's phone through ntfy. An alert is sent when a check fails twice in a row (10 min), and again when it recovers.
 # Config (not in git): /etc/getcleanstays-watch.conf  ->  NTFY_TOPIC=...
 # Usage: getcleanstays-watch.sh [run|selftest]
 set -uo pipefail
@@ -24,7 +24,7 @@ result() {
     if [ -f "$a" ]; then rm -f "$a"; notify "GetCleanStays: $name recovered" default white_check_mark "$msg"; fi
   else
     fails=$((fails+1)); echo "$fails" >"$f"
-    if [ "$fails" -ge 2 ] && [ ! -f "$a" ]; then touch "$a"; notify "GetCleanStays DOWN: $name" urgent rotating_light "$msg (failing for $fails min)"; fi
+    if [ "$fails" -ge 2 ] && [ ! -f "$a" ]; then touch "$a"; notify "GetCleanStays DOWN: $name" urgent rotating_light "$msg (failing for about $((fails*5)) min)"; fi
   fi
 }
 
@@ -61,11 +61,11 @@ run_checks() {
   use=$(df --output=pcent / | tail -1 | tr -dc 0-9)
   if [ "$use" -ge 92 ]; then warn_once disk-crit 3600 "GetCleanStays: disk $use% full" "The server disk is almost full."; elif [ "$use" -ge 85 ]; then warn_once disk 86400 "GetCleanStays: disk $use% full" "Free some space soon."; fi
 
-  # errors in the API log over the last 2 minutes (the app logs these tags when something real fails)
-  logs=$(docker logs --since 2m webapp-api-1 2>&1)
+  # errors in the API log over the last 5 minutes (one timer interval) (the app logs these tags when something real fails)
+  logs=$(docker logs --since 5m webapp-api-1 2>&1)
   for pat in '\[unhandled\]' 'database check failed' 'Failed to send' 'SMS failed' 'Resend error' 'Resend rejected' 'PrismaClientInitializationError' 'ECONNREFUSED.*5432'; do
     n=$(echo "$logs" | grep -cE "$pat")
-    if [ "$n" -gt 0 ]; then ex=$(echo "$logs" | grep -E "$pat" | tail -1 | cut -c1-160); warn_once "log-${pat//[^a-zA-Z]/}" 1800 "GetCleanStays errors: $pat ($n in 2 min)" "$ex"; fi
+    if [ "$n" -gt 0 ]; then ex=$(echo "$logs" | grep -E "$pat" | tail -1 | cut -c1-160); warn_once "log-${pat//[^a-zA-Z]/}" 1800 "GetCleanStays errors: $pat ($n in 5 min)" "$ex"; fi
   done
 
   # attack signals from the security-event log (last 10 min): many failed sign-ins overall, or from one address
